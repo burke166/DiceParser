@@ -7,6 +7,8 @@ internal enum TokenKind : byte
 
     Plus, Minus, Star, Slash, Percent,
     LParen, RParen,
+    LBrace, RBrace, // '{' or '}'
+    Comma,
     Semicolon,
 
     D,          // 'd' or 'D'

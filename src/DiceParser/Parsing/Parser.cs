@@ -111,6 +111,58 @@ internal ref struct Parser
         return left;
     }
 
+    private int ParseCustomDie()
+    {
+        var faces = new List<int>();
+
+        if (_lex.Current.Kind == TokenKind.RBrace)
+            throw new ParseException("Custom die must have at least one face.");
+
+        do
+        {
+            if (_lex.Current.Kind != TokenKind.Number &&
+                _lex.Current.Kind != TokenKind.Minus)
+            {
+                throw new ParseException($"Expected custom die face, found {_lex.Current.Kind}");
+            }
+
+            int face = ParseSignedIntegerLiteral();
+            faces.Add(face);
+
+            if (faces.Count > _limits.MaxCustomDieFaces)
+                throw new ParseException($"Custom die has too many faces.");
+        }
+        while (TryConsume(TokenKind.Comma));
+
+        Expect(TokenKind.RBrace);
+        _lex.Next();
+
+        return AddNode(Node.CustomDie(faces.ToArray()));
+    }
+
+    private int ParseSignedIntegerLiteral()
+    {
+        var sign = 1;
+
+        if (_lex.Current.Kind == TokenKind.Minus)
+        {
+            sign = -1;
+            _lex.Next();
+        }
+        else if (_lex.Current.Kind == TokenKind.Plus)
+        {
+            _lex.Next();
+        }
+
+        if (_lex.Current.Kind != TokenKind.Number)
+            throw new ParseException($"Expected number, found {_lex.Current.Kind}");
+
+        int value = _lex.Current.IntValue;
+        _lex.Next();
+
+        return sign * value;
+    }
+
     private int ParsePrefix()
     {
         var tok = _lex.Current;
@@ -127,6 +179,12 @@ internal ref struct Parser
                     Expect(TokenKind.RParen);
                     _lex.Next();
                     return inner;
+                }
+
+            case TokenKind.LBrace:
+                {
+                    _lex.Next();
+                    return ParseCustomDie();
                 }
 
             case TokenKind.Plus:
@@ -156,6 +214,15 @@ internal ref struct Parser
     {
         if (_lex.Current.Kind != kind)
             throw new ParseException($"Expected {kind}, found {_lex.Current.Kind}");
+    }
+
+    private bool TryConsume(TokenKind kind)
+    {
+        if (_lex.Current.Kind != kind)
+            return false;
+
+        _lex.Next();
+        return true;
     }
 
     private int AddNode(Node n)

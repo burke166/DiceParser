@@ -6,4 +6,5 @@ internal enum NodeKind : byte
     Unary,
     Binary,
     Dice,
+    CustomDie,
 }

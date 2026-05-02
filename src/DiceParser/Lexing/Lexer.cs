@@ -40,6 +40,9 @@ internal ref struct Lexer
             case '(': _i++; Current = new Token(TokenKind.LParen); return;
             case ')': _i++; Current = new Token(TokenKind.RParen); return;
             case ';': _i++; Current = new Token(TokenKind.Semicolon); return;
+            case '{': _i++; Current = new Token(TokenKind.LBrace); return;
+            case '}': _i++; Current = new Token(TokenKind.RBrace); return;
+            case ',': _i++; Current = new Token(TokenKind.Comma); return;
         }
 
         // Dice operator
