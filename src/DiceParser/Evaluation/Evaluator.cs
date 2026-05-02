@@ -42,39 +42,68 @@ internal sealed class Evaluator
 
             NodeKind.Dice => EvalDice(n.A, n.B, ref ctx),
 
-            NodeKind.CustomDie => EvalDice(n.A, n.B, ref ctx, n.Faces),
-
             _ => throw new EvalException("Unknown node kind")
         };
     }
 
-    private int EvalDice(int countExprId, int sidesExprId, ref EvalContext ctx, int[]? faces = null)
+    private int EvalDice(int countExprId, int dieExprId, ref EvalContext ctx)
     {
-        int count = 1; // EvalInt(countExprId, ref ctx);
-        int sides = faces == null ? EvalInt(sidesExprId, ref ctx) : faces.Length;
+        int count = EvalInt(countExprId, ref ctx);
+        int[] faces = EvalDieFaces(dieExprId, ref ctx);
 
-        if (count < 0) throw new EvalException("Dice count cannot be negative.");
-        if (sides <= 0) throw new EvalException("Dice sides must be positive.");
-        if (sides > _limits.MaxSides) throw new EvalException($"Dice sides too large (max {_limits.MaxSides}).");
-        if (faces is not null && sides > _limits.MaxCustomDieFaces) throw new EvalException($"Too many custom die faces (max {_limits.MaxCustomDieFaces}).");
-        if (ctx.DiceRolled + count > _limits.MaxDicePerExpr) throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
+        if (count < 0)
+            throw new EvalException("Dice count cannot be negative.");
 
-        Console.WriteLine(count.ToString());
+        if (faces.Length <= 0)
+            throw new EvalException("Dice must have at least one face.");
+
+        if (faces.Length > _limits.MaxSides)
+            throw new EvalException($"Dice sides too large (max {_limits.MaxSides}).");
+
+        if (ctx.DiceRolled + count > _limits.MaxDicePerExpr)
+            throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
 
         int total = 0;
 
         for (int i = 0; i < count; i++)
         {
-            int roll = faces is null ? ctx.Rng.NextInt(1, sides + 1) : faces[ctx.Rng.NextInt(0, sides)]; // inclusive range
+            int faceIndex = ctx.Rng.NextInt(0, faces.Length);
+            int roll = faces[faceIndex];
+
             ctx.Rolls.Add(roll);
             total += roll;
         }
 
         ctx.DiceRolled += count;
 
-        // TODO: apply modifiers (explode/reroll/keep-drop/etc.) using modsHandle from Node.C later.
+         // TODO: apply modifiers (explode/reroll/keep-drop/etc.) using modsHandle from Node.C later.
 
         return total;
+    }
+
+    private int[] EvalDieFaces(int dieExprId, ref EvalContext ctx)
+    {
+        ref readonly Node n = ref _pool[dieExprId];
+
+        return n.Kind switch
+        {
+            NodeKind.CustomDie => n.Faces,
+
+            _ => BuildStandardDieFaces(EvalInt(dieExprId, ref ctx))
+        };
+    }
+
+    private static int[] BuildStandardDieFaces(int sides)
+    {
+        if (sides <= 0)
+            throw new EvalException("Dice sides must be positive.");
+
+        var faces = new int[sides];
+
+        for (int i = 0; i < sides; i++)
+            faces[i] = i + 1;
+
+        return faces;
     }
 
     public string DumpTree(int root)

@@ -24,5 +24,5 @@ internal readonly struct Node
     public static Node Unary(OpKind op, int rhs) => new(NodeKind.Unary, op, rhs, 0, 0, 0);
     public static Node Binary(OpKind op, int lhs, int rhs) => new(NodeKind.Binary, op, lhs, rhs, 0, 0);
     public static Node Dice(int countExpr, int sidesExpr, int modsHandle = 0) => new(NodeKind.Dice, 0, countExpr, sidesExpr, modsHandle, 0);
-    public static Node CustomDie(int[] faces, int modsHandle = 0) => new(NodeKind.CustomDie, 0, 1, faces.Count(), modsHandle, 0, faces);
+    public static Node CustomDie(int[] faces) => new(NodeKind.CustomDie, 0, 0, 0, 0, 0, faces);
 }
