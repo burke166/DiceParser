@@ -1,6 +1,8 @@
 ﻿using DiceParser;
 using DiceParser.Exceptions;
 
+namespace DiceParser.Cli;
+
 public static class Program
 {
     public static void Main()
