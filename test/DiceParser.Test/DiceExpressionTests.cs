@@ -15,8 +15,8 @@ public class DiceExpressionTests
         var expr = new DiceEngine(FixedSeed);
 
         // Act
-        var a = plain.Execute("3d6").Single();
-        var b = expr.Execute("(1+2)d(3+3)").Single();
+        var a = plain.ExecuteSingleNumericRoll("3d6");
+        var b = expr.ExecuteSingleNumericRoll("(1+2)d(3+3)");
 
         // Assert — same dice count and sides → same RNG draws in the same order
         Assert.Equal(a.Total, b.Total);
@@ -32,8 +32,8 @@ public class DiceExpressionTests
         var reference = new DiceEngine(FixedSeed);
 
         // Act — (1+1)=2, (2*3)=6 → 2d6
-        var actual = engine.Execute("(1+1)d(2*3)").Single();
-        var expected = reference.Execute("2d6").Single();
+        var actual = engine.ExecuteSingleNumericRoll("(1+1)d(2*3)");
+        var expected = reference.ExecuteSingleNumericRoll("2d6");
 
         // Assert
         Assert.Equal(expected.Total, actual.Total);
@@ -51,12 +51,14 @@ public class DiceExpressionTests
 
         // Assert — two roll results, not one combined total
         Assert.Equal(2, results.Count);
-        Assert.Single(results[0].Rolls);
-        Assert.Equal(2, results[1].Rolls.Length);
-        Assert.Equal(results[0].Rolls.Sum(), results[0].Total);
-        Assert.Equal(results[1].Rolls.Sum(), results[1].Total);
-        Assert.Equal(1, results[0].DiceRolled);
-        Assert.Equal(2, results[1].DiceRolled);
+        var r0 = Assert.IsType<NumericExpressionResult>(results[0]).Roll;
+        var r1 = Assert.IsType<NumericExpressionResult>(results[1]).Roll;
+        Assert.Single(r0.Rolls);
+        Assert.Equal(2, r1.Rolls.Length);
+        Assert.Equal(r0.Rolls.Sum(), r0.Total);
+        Assert.Equal(r1.Rolls.Sum(), r1.Total);
+        Assert.Equal(1, r0.DiceRolled);
+        Assert.Equal(2, r1.DiceRolled);
     }
 
     [Fact]
@@ -70,9 +72,9 @@ public class DiceExpressionTests
 
         // Assert
         Assert.Equal(3, results.Count);
-        Assert.Single(results[0].Rolls);
-        Assert.Single(results[1].Rolls);
-        Assert.Equal(2, results[2].Rolls.Length);
+        Assert.Single(Assert.IsType<NumericExpressionResult>(results[0]).Roll.Rolls);
+        Assert.Single(Assert.IsType<NumericExpressionResult>(results[1]).Roll.Rolls);
+        Assert.Equal(2, Assert.IsType<NumericExpressionResult>(results[2]).Roll.Rolls.Length);
     }
 
     [Fact]
@@ -86,6 +88,6 @@ public class DiceExpressionTests
 
         // Assert
         Assert.Single(results);
-        Assert.Equal(2, results[0].Rolls.Length);
+        Assert.Equal(2, Assert.IsType<NumericExpressionResult>(results[0]).Roll.Rolls.Length);
     }
 }

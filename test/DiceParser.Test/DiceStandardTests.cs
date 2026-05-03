@@ -14,7 +14,7 @@ public class DiceStandardTests
         var engine = new DiceEngine(FixedSeed);
 
         // Act
-        var result = engine.Execute("1d6").Single();
+        var result = engine.ExecuteSingleNumericRoll("1d6");
 
         // Assert
         Assert.InRange(result.Total, 1, 6);
@@ -30,7 +30,7 @@ public class DiceStandardTests
         var engine = new DiceEngine(FixedSeed);
 
         // Act
-        var result = engine.Execute("3d6").Single();
+        var result = engine.ExecuteSingleNumericRoll("3d6");
 
         // Assert
         Assert.Equal(3, result.Rolls.Length);
@@ -46,7 +46,7 @@ public class DiceStandardTests
         var engine = new DiceEngine(FixedSeed);
 
         // Act
-        var result = engine.Execute("0d6").Single();
+        var result = engine.ExecuteSingleNumericRoll("0d6");
 
         // Assert
         Assert.Equal(0, result.Total);
@@ -61,7 +61,7 @@ public class DiceStandardTests
         var engine = new DiceEngine(FixedSeed);
 
         // Act
-        var result = engine.Execute("2d6+3").Single();
+        var result = engine.ExecuteSingleNumericRoll("2d6+3");
 
         // Assert
         Assert.Equal(2, result.Rolls.Length);
@@ -78,8 +78,8 @@ public class DiceStandardTests
         var b = new DiceEngine(FixedSeed);
 
         // Act
-        var implied = a.Execute("d6").Single();
-        var explicitOne = b.Execute("1d6").Single();
+        var implied = a.ExecuteSingleNumericRoll("d6");
+        var explicitOne = b.ExecuteSingleNumericRoll("1d6");
 
         // Assert
         Assert.Equal(explicitOne.Total, implied.Total);
@@ -94,8 +94,8 @@ public class DiceStandardTests
         var b = new DiceEngine(4242);
 
         // Act
-        var ra = a.Execute("5d10").Single();
-        var rb = b.Execute("5d10").Single();
+        var ra = a.ExecuteSingleNumericRoll("5d10");
+        var rb = b.ExecuteSingleNumericRoll("5d10");
 
         // Assert
         Assert.Equal(ra.Total, rb.Total);

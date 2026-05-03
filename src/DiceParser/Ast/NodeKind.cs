@@ -7,4 +7,5 @@ internal enum NodeKind : byte
     Binary,
     Dice,
     CustomDie,
+    RollGroup,
 }

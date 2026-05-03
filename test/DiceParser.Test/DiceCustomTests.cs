@@ -15,7 +15,7 @@ public class DiceCustomTests
         int[] allowed = [1, 2, 3];
 
         // Act
-        var result = engine.Execute("1d{1,2,3}").Single();
+        var result = engine.ExecuteSingleNumericRoll("1d{1,2,3}");
 
         // Assert
         Assert.Single(result.Rolls);
@@ -32,7 +32,7 @@ public class DiceCustomTests
         int[] allowed = [-1, 0, 1];
 
         // Act
-        var result = engine.Execute("4d{-1,0,1}").Single();
+        var result = engine.ExecuteSingleNumericRoll("4d{-1,0,1}");
 
         // Assert
         Assert.Equal(4, result.Rolls.Length);
@@ -49,7 +49,7 @@ public class DiceCustomTests
         int[] faces = [2, 4, 6, 8];
 
         // Act
-        var result = engine.Execute("12d{2,4,6,8}").Single();
+        var result = engine.ExecuteSingleNumericRoll("12d{2,4,6,8}");
 
         // Assert
         Assert.Equal(12, result.Rolls.Length);

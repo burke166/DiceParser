@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using DiceParser.Ast;
 using DiceParser.Exceptions;
 using DiceParser.Lexing;
@@ -26,7 +27,7 @@ internal ref struct Parser
             if (roots.Count >= _limits.MaxProgramExprs)
                 throw new ParseException($"Program has too many expressions (max {_limits.MaxProgramExprs}).");
 
-            int expr = ParseExpression(0);
+            int expr = ParseExpression(0, customDieBracesOnly: false);
             roots.Add(expr);
 
             if (_lex.Current.Kind == TokenKind.Semicolon)
@@ -56,9 +57,9 @@ internal ref struct Parser
         _ => 0
     };
 
-    private int ParseExpression(int minBp)
+    private int ParseExpression(int minBp, bool customDieBracesOnly)
     {
-        int left = ParsePrefix();
+        int left = ParsePrefix(customDieBracesOnly);
 
         while (true)
         {
@@ -77,7 +78,7 @@ internal ref struct Parser
                     {
                         _lex.Next();
                         int rbp = lbp + 1; // left-associative
-                        int right = ParseExpression(rbp);
+                        int right = ParseExpression(rbp, customDieBracesOnly);
 
                         var op = tok.Kind switch
                         {
@@ -98,7 +99,7 @@ internal ref struct Parser
                         // Support implied count: if left is missing, we won't reach here; that is handled in prefix (d20).
                         _lex.Next();
 
-                        int sides = ParseExpression(lbp + 1); // bind tightly to right
+                        int sides = ParseExpression(lbp + 1, customDieBracesOnly: true); // `{...}` is custom faces only
                         int modsHandle = ParseOptionalDiceMods();
                         left = AddNode(Node.Dice(left, sides, modsHandle));
                         break;
@@ -140,6 +141,147 @@ internal ref struct Parser
         return AddNode(Node.CustomDie(faces.ToArray()));
     }
 
+    private int ParseBraceExpression(bool customDieBracesOnly)
+    {
+        Expect(TokenKind.LBrace);
+        ReadOnlySpan<char> src = _lex.Source;
+        int inner = _lex.RawIndex;
+
+        int p = inner;
+        while (p < src.Length && char.IsWhiteSpace(src[p]))
+            p++;
+
+        if (p >= src.Length || src[p] == '}')
+        {
+            if (customDieBracesOnly)
+                throw new ParseException("Custom die must have at least one face.");
+
+            throw new ParseException("Roll group cannot be empty.");
+        }
+
+        if (customDieBracesOnly)
+        {
+            _lex.ResyncAt(inner);
+            return ParseCustomDie();
+        }
+
+        if (src[p] == ':')
+            throw new ParseException("Missing roll group label before ':'.");
+
+        if (!TryScanRollGroupLabelColon(src, p, out string firstLabel, out int exprAt))
+        {
+            _lex.ResyncAt(inner);
+            return ParseCustomDie();
+        }
+
+        _lex.ResyncAt(exprAt);
+        return ParseRollGroupAfterFirstLabel(firstLabel);
+    }
+
+    /// <summary>Scans <c>label:</c> at <paramref name="start"/>; <paramref name="exprStart"/> is the index of the first character after ':'.</summary>
+    private static bool TryScanRollGroupLabelColon(ReadOnlySpan<char> src, int start, out string label, out int exprStart)
+    {
+        label = string.Empty;
+        exprStart = start;
+
+        if (start >= src.Length)
+            return false;
+
+        char c0 = src[start];
+        if (!char.IsAsciiLetter(c0) && c0 != '_')
+            return false;
+
+        int labelStart = start;
+        int i = start + 1;
+        while (i < src.Length)
+        {
+            char c = src[i];
+            if (char.IsAsciiLetter(c) || char.IsAsciiDigit(c) || c == '_' || c == '-')
+            {
+                i++;
+                continue;
+            }
+
+            break;
+        }
+
+        int labelEnd = i;
+        while (i < src.Length && char.IsWhiteSpace(src[i]))
+            i++;
+
+        if (i >= src.Length || src[i] != ':')
+            return false;
+
+        i++;
+        label = new string(src.Slice(labelStart, labelEnd - labelStart));
+        exprStart = i;
+        return true;
+    }
+
+    private int ParseRollGroupAfterFirstLabel(string firstLabel)
+    {
+        var entries = new List<RollGroupEntry>(4);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        if (firstLabel.Length == 0)
+            throw new ParseException("Roll group label cannot be empty.");
+
+        if (firstLabel.Length > _limits.MaxRollGroupLabelLength)
+            throw new ParseException($"Roll group label is too long (max {_limits.MaxRollGroupLabelLength} characters).");
+
+        if (!seen.Add(firstLabel))
+            throw new ParseException($"Duplicate roll group label '{firstLabel}'.");
+
+        if (_lex.Current.Kind is TokenKind.RBrace or TokenKind.Comma)
+            throw new ParseException("Missing expression after ':' in roll group.");
+
+        int firstExpr = ParseExpression(0, customDieBracesOnly: false);
+        entries.Add(new RollGroupEntry(firstLabel, firstExpr));
+
+        if (entries.Count > _limits.MaxRollGroupEntries)
+            throw new ParseException($"Roll group has too many entries (max {_limits.MaxRollGroupEntries}).");
+
+        while (TryConsume(TokenKind.Comma))
+        {
+            if (_lex.Current.Kind == TokenKind.RBrace)
+                throw new ParseException("Trailing comma in roll group.");
+
+            if (_lex.Current.Kind == TokenKind.Semicolon)
+                throw new ParseException("Semicolon is not allowed inside a roll group.");
+
+            LexerBookmark bk = _lex.Bookmark();
+            if (!_lex.TryConsumeRollGroupLabelAndColon(bk, out string lab))
+                throw new ParseException("Expected 'label:' after ',' in roll group.");
+
+            if (lab.Length == 0)
+                throw new ParseException("Roll group label cannot be empty.");
+
+            if (lab.Length > _limits.MaxRollGroupLabelLength)
+                throw new ParseException($"Roll group label is too long (max {_limits.MaxRollGroupLabelLength} characters).");
+
+            if (!seen.Add(lab))
+                throw new ParseException($"Duplicate roll group label '{lab}'.");
+
+            if (_lex.Current.Kind is TokenKind.RBrace or TokenKind.Comma)
+                throw new ParseException("Missing expression after ':' in roll group.");
+
+            int exprId = ParseExpression(0, customDieBracesOnly: false);
+            entries.Add(new RollGroupEntry(lab, exprId));
+
+            if (entries.Count > _limits.MaxRollGroupEntries)
+                throw new ParseException($"Roll group has too many entries (max {_limits.MaxRollGroupEntries}).");
+        }
+
+        if (_lex.Current.Kind == TokenKind.Semicolon)
+            throw new ParseException("Semicolon is not allowed inside a roll group.");
+
+        Expect(TokenKind.RBrace);
+        _lex.Next();
+
+        int start = _pool.AppendRollGroupEntries(CollectionsMarshal.AsSpan(entries));
+        return AddNode(Node.RollGroup(start, entries.Count));
+    }
+
     private int ParseSignedIntegerLiteral()
     {
         var sign = 1;
@@ -163,7 +305,7 @@ internal ref struct Parser
         return sign * value;
     }
 
-    private int ParsePrefix()
+    private int ParsePrefix(bool customDieBracesOnly)
     {
         var tok = _lex.Current;
         switch (tok.Kind)
@@ -175,23 +317,20 @@ internal ref struct Parser
             case TokenKind.LParen:
                 {
                     _lex.Next();
-                    int inner = ParseExpression(0);
+                    int inner = ParseExpression(0, customDieBracesOnly);
                     Expect(TokenKind.RParen);
                     _lex.Next();
                     return inner;
                 }
 
             case TokenKind.LBrace:
-                {
-                    _lex.Next();
-                    return ParseCustomDie();
-                }
+                return ParseBraceExpression(customDieBracesOnly);
 
             case TokenKind.Plus:
             case TokenKind.Minus:
                 {
                     _lex.Next();
-                    int rhs = ParseExpression(80); // unary binds tight
+                    int rhs = ParseExpression(80, customDieBracesOnly); // unary binds tight
                     var op = tok.Kind == TokenKind.Plus ? OpKind.Pos : OpKind.Neg;
                     return AddNode(Node.Unary(op, rhs));
                 }
@@ -200,7 +339,7 @@ internal ref struct Parser
                 {
                     // Implied count: d20 == 1d20
                     _lex.Next();
-                    int sides = ParseExpression(71); // right binds tight
+                    int sides = ParseExpression(71, customDieBracesOnly: true); // right binds tight
                     int modsHandle = ParseOptionalDiceMods();
                     int one = AddNode(Node.Number(1));
                     return AddNode(Node.Dice(one, sides, modsHandle));

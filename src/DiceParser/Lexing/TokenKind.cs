@@ -9,6 +9,7 @@ internal enum TokenKind : byte
     LParen, RParen,
     LBrace, RBrace, // '{' or '}'
     Comma,
+    Colon,
     Semicolon,
 
     Greater,       // '>' (explode compare; not part of '>=')

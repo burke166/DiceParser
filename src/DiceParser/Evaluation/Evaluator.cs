@@ -1,3 +1,4 @@
+using DiceParser;
 using DiceParser.Ast;
 using DiceParser.Exceptions;
 using System.Text;
@@ -44,8 +45,33 @@ internal sealed class Evaluator
 
             NodeKind.Dice => EvalDice(n.A, n.B, n.C, ref ctx),
 
+            NodeKind.RollGroup =>
+                throw new EvalException("A roll group cannot be used as a number inside an expression."),
+
             _ => throw new EvalException("Unknown node kind")
         };
+    }
+
+    internal RollGroupResult EvalRollGroup(int nodeId, ref EvalContext ctx)
+    {
+        ref readonly Node n = ref _pool[nodeId];
+        if (n.Kind != NodeKind.RollGroup)
+            throw new EvalException("Internal error: expected roll group node.");
+
+        ReadOnlySpan<RollGroupEntry> entries = _pool.GetRollGroupEntries(n.A, n.B);
+        var labeled = new List<LabeledRollResult>(entries.Length);
+
+        for (int i = 0; i < entries.Length; i++)
+        {
+            RollGroupEntry e = entries[i];
+            var sub = new EvalContext(ctx.Rng, ctx.Limits);
+            int total = EvalInt(e.ExprId, ref sub);
+            labeled.Add(new LabeledRollResult(
+                e.Label,
+                new RollResult(total, sub.DiceRolled, sub.Rolls.ToArray())));
+        }
+
+        return new RollGroupResult(labeled);
     }
 
     private int EvalDice(int countExprId, int dieExprId, int modsHandle, ref EvalContext ctx)
@@ -557,6 +583,17 @@ internal sealed class Evaluator
                 DumpNode(node.A, sb, childIndent, false, visiting);
                 DumpNode(node.B, sb, childIndent, true, visiting);
                 break;
+
+            case NodeKind.RollGroup:
+                ReadOnlySpan<RollGroupEntry> rg = _pool.GetRollGroupEntries(node.A, node.B);
+                for (int i = 0; i < rg.Length; i++)
+                {
+                    bool lastEntry = i == rg.Length - 1;
+                    sb.AppendLine($"{childIndent}{(lastEntry ? "└─ " : "├─ ")}{rg[i].Label}:");
+                    DumpNode(rg[i].ExprId, sb, childIndent + (lastEntry ? "   " : "│  "), true, visiting);
+                }
+
+                break;
         }
 
         visiting.Remove(id);
@@ -580,6 +617,9 @@ internal sealed class Evaluator
 
             NodeKind.Dice =>
                 $"Dice mods#{node.C}",
+
+            NodeKind.RollGroup =>
+                $"RollGroup entries@{node.A} count={node.B}",
 
             _ =>
                 node.Kind.ToString()

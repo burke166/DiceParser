@@ -81,7 +81,7 @@ public class KeepDropDiceTests
     public void Four_d6_keep_highest_3_matches_stable_ranking()
     {
         var engine = new DiceEngine(2026);
-        var r = engine.Execute("4d6kh3").Single();
+        var r = engine.ExecuteSingleNumericRoll("4d6kh3");
         Assert.Equal(4, r.Rolls.Length);
         Assert.Equal(SumKeepHighestStable(r.Rolls, 3), r.Total);
     }
@@ -90,7 +90,7 @@ public class KeepDropDiceTests
     public void Four_d6_keep_lowest_3_matches_stable_ranking()
     {
         var engine = new DiceEngine(2026);
-        var r = engine.Execute("4d6kl3").Single();
+        var r = engine.ExecuteSingleNumericRoll("4d6kl3");
         Assert.Equal(4, r.Rolls.Length);
         Assert.Equal(SumKeepLowestStable(r.Rolls, 3), r.Total);
     }
@@ -99,7 +99,7 @@ public class KeepDropDiceTests
     public void Four_d6_drop_highest_1_matches_stable_ranking()
     {
         var engine = new DiceEngine(2026);
-        var r = engine.Execute("4d6dh1").Single();
+        var r = engine.ExecuteSingleNumericRoll("4d6dh1");
         Assert.Equal(4, r.Rolls.Length);
         Assert.Equal(SumDropHighestStable(r.Rolls, 1), r.Total);
     }
@@ -108,7 +108,7 @@ public class KeepDropDiceTests
     public void Four_d6_drop_lowest_1_matches_stable_ranking()
     {
         var engine = new DiceEngine(2026);
-        var r = engine.Execute("4d6dl1").Single();
+        var r = engine.ExecuteSingleNumericRoll("4d6dl1");
         Assert.Equal(4, r.Rolls.Length);
         Assert.Equal(SumDropLowestStable(r.Rolls, 1), r.Total);
     }
@@ -117,7 +117,7 @@ public class KeepDropDiceTests
     public void Two_d20_keep_highest_1_advantage_style()
     {
         var engine = new DiceEngine(99);
-        var r = engine.Execute("2d20kh1").Single();
+        var r = engine.ExecuteSingleNumericRoll("2d20kh1");
         Assert.Equal(2, r.Rolls.Length);
         Assert.Equal(SumKeepHighestStable(r.Rolls, 1), r.Total);
         Assert.Equal(Math.Max(r.Rolls[0], r.Rolls[1]), r.Total);
@@ -127,7 +127,7 @@ public class KeepDropDiceTests
     public void Two_d20_keep_lowest_1_disadvantage_style()
     {
         var engine = new DiceEngine(99);
-        var r = engine.Execute("2d20kl1").Single();
+        var r = engine.ExecuteSingleNumericRoll("2d20kl1");
         Assert.Equal(2, r.Rolls.Length);
         Assert.Equal(SumKeepLowestStable(r.Rolls, 1), r.Total);
         Assert.Equal(Math.Min(r.Rolls[0], r.Rolls[1]), r.Total);
@@ -137,9 +137,9 @@ public class KeepDropDiceTests
     public void Keep_drop_modifier_case_insensitive()
     {
         var engine = new DiceEngine(1);
-        var lower = engine.Execute("3d6kh2").Single();
+        var lower = engine.ExecuteSingleNumericRoll("3d6kh2");
         var engine2 = new DiceEngine(1);
-        var upper = engine2.Execute("3d6KH2").Single();
+        var upper = engine2.ExecuteSingleNumericRoll("3d6KH2");
         Assert.Equal(lower.Rolls, upper.Rolls);
         Assert.Equal(lower.Total, upper.Total);
     }
@@ -165,8 +165,8 @@ public class KeepDropDiceTests
     {
         var engine = new DiceEngine(42);
         var withModEngine = new DiceEngine(42);
-        var plain = engine.Execute("3d10+4").Single();
-        var withMod = withModEngine.Execute("3d10+4").Single();
+        var plain = engine.ExecuteSingleNumericRoll("3d10+4");
+        var withMod = withModEngine.ExecuteSingleNumericRoll("3d10+4");
         Assert.Equal(plain.Rolls, withMod.Rolls);
         Assert.Equal(plain.Total, withMod.Total);
         Assert.Equal(plain.DiceRolled, withMod.DiceRolled);
@@ -176,7 +176,7 @@ public class KeepDropDiceTests
     public void Custom_die_faces_use_same_keep_drop_logic()
     {
         var engine = new DiceEngine(7);
-        var r = engine.Execute("5d{2,4,6,8,10}kh3").Single();
+        var r = engine.ExecuteSingleNumericRoll("5d{2,4,6,8,10}kh3");
         Assert.Equal(5, r.Rolls.Length);
         Assert.Equal(SumKeepHighestStable(r.Rolls, 3), r.Total);
         foreach (var v in r.Rolls)

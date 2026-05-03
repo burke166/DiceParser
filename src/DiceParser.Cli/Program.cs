@@ -1,4 +1,4 @@
-﻿using DiceParser;
+using DiceParser;
 using DiceParser.Exceptions;
 
 namespace DiceParser.Cli;
@@ -23,8 +23,23 @@ public static class Program
                 Console.WriteLine($"Input: {input}");
                 for (int i = 0; i < results.Count; i++)
                 {
-                    var r = results[i];
-                    Console.WriteLine($"  Expr {i + 1}: Total={r.Total}, DiceRolled={r.DiceRolled}, Rolls=[{string.Join(",", r.Rolls)}]");
+                    ProgramExpressionResult r = results[i];
+                    switch (r)
+                    {
+                        case NumericExpressionResult n:
+                            Console.WriteLine(
+                                $"  Expr {i + 1}: Total={n.Roll.Total}, DiceRolled={n.Roll.DiceRolled}, Rolls=[{string.Join(",", n.Roll.Rolls)}]");
+                            break;
+                        case RollGroupExpressionResult g:
+                            Console.WriteLine($"  Expr {i + 1}: Roll group ({g.Group.Results.Count} labels)");
+                            foreach (LabeledRollResult lr in g.Group.Results)
+                            {
+                                Console.WriteLine(
+                                    $"    {lr.Label}: Total={lr.Result.Total}, DiceRolled={lr.Result.DiceRolled}, Rolls=[{string.Join(",", lr.Result.Rolls)}]");
+                            }
+
+                            break;
+                    }
                 }
                 Console.WriteLine();
             }

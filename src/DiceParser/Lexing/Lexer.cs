@@ -3,10 +3,23 @@ using System.Globalization;
 
 namespace DiceParser.Lexing;
 
+internal readonly struct LexerBookmark
+{
+    public readonly int Index;
+    public readonly Token Current;
+
+    public LexerBookmark(int index, Token current)
+    {
+        Index = index;
+        Current = current;
+    }
+}
+
 internal ref struct Lexer
 {
     private ReadOnlySpan<char> _s;
     private int _i;
+    private int _lexemeStart;
 
     public Lexer(ReadOnlySpan<char> s)
     {
@@ -18,15 +31,29 @@ internal ref struct Lexer
 
     public Token Current { get; private set; }
 
+    /// <summary>Index into <see cref="Source"/> for the first character of <see cref="Current"/> (or next unconsumed char when <see cref="TokenKind.End"/>).</summary>
+    public int RawIndex => _i;
+
+    public ReadOnlySpan<char> Source => _s;
+
+    /// <summary>Sets the scan position and refreshes <see cref="Current"/> from that offset.</summary>
+    public void ResyncAt(int index)
+    {
+        _i = index;
+        Next();
+    }
+
     public void Next()
     {
         SkipWs();
         if (_i >= _s.Length)
         {
+            _lexemeStart = _i;
             Current = new Token(TokenKind.End);
             return;
         }
 
+        _lexemeStart = _i;
         char c = _s[_i];
 
         // Single-char tokens
@@ -43,6 +70,7 @@ internal ref struct Lexer
             case '{': _i++; Current = new Token(TokenKind.LBrace); return;
             case '}': _i++; Current = new Token(TokenKind.RBrace); return;
             case ',': _i++; Current = new Token(TokenKind.Comma); return;
+            case ':': _i++; Current = new Token(TokenKind.Colon); return;
             case '>':
                 _i++;
                 if (_i < _s.Length && _s[_i] == '=')
@@ -133,7 +161,7 @@ internal ref struct Lexer
     public ReadOnlySpan<char> SliceIdentifier(Token t)
         => _s.Slice(t.Start, t.Length);
 
-    private void SkipWs()
+    internal void SkipWhitespace()
     {
         while (_i < _s.Length)
         {
@@ -142,4 +170,68 @@ internal ref struct Lexer
             else break;
         }
     }
+
+    /// <summary>Bookmark the start index of <see cref="Current"/> (for rewinding to re-lex or raw-scan from the same character).</summary>
+    public LexerBookmark Bookmark() => new(_lexemeStart, Current);
+
+    public void Restore(LexerBookmark mark)
+    {
+        _i = mark.Index;
+        Current = mark.Current;
+    }
+
+    /// <summary>
+    /// From <paramref name="bookmark"/>, if the next non-whitespace content is <c>label:</c> (roll-group label rules),
+    /// consumes through ':' and returns true. Otherwise restores the lexer and returns false.
+    /// </summary>
+    public bool TryConsumeRollGroupLabelAndColon(LexerBookmark bookmark, out string label)
+    {
+        Restore(bookmark);
+        label = string.Empty;
+        SkipWhitespace();
+
+        if (_i >= _s.Length)
+        {
+            Restore(bookmark);
+            return false;
+        }
+
+        char c0 = _s[_i];
+        if (!char.IsAsciiLetter(c0) && c0 != '_')
+        {
+            Restore(bookmark);
+            return false;
+        }
+
+        int start = _i;
+        _i++;
+
+        while (_i < _s.Length)
+        {
+            char c = _s[_i];
+            if (char.IsAsciiLetter(c) || char.IsAsciiDigit(c) || c == '_' || c == '-')
+            {
+                _i++;
+                continue;
+            }
+
+            break;
+        }
+
+        int labelEnd = _i;
+        SkipWhitespace();
+
+        if (_i >= _s.Length || _s[_i] != ':')
+        {
+            Restore(bookmark);
+            return false;
+        }
+
+        label = new string(_s.Slice(start, labelEnd - start));
+        _i++; // ':'
+        Next();
+        return true;
+    }
+
+    private void SkipWs() => SkipWhitespace();
 }

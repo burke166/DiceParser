@@ -11,6 +11,7 @@ internal readonly struct Node
     // Binary:     A = lhs, B = rhs
     // Dice:       A = countExpr, B = sidesExpr, C = DiceRollMods bundle handle (1-based NodePool; 0 = none)
     // CustomDice: A = countExpr, C = mods handle (not used yet), Faces = faces array
+    // RollGroup:  A = start index in NodePool roll-group entry list, B = entry count
     public readonly int A;
     public readonly int B;
     public readonly int C;
@@ -26,4 +27,5 @@ internal readonly struct Node
     public static Node Dice(int countExpr, int sidesExpr, int diceRollModsHandle = 0)
         => new(NodeKind.Dice, 0, countExpr, sidesExpr, diceRollModsHandle, 0);
     public static Node CustomDie(int[] faces) => new(NodeKind.CustomDie, 0, 0, 0, 0, 0, faces);
+    public static Node RollGroup(int entriesStart, int entryCount) => new(NodeKind.RollGroup, 0, entriesStart, entryCount, 0, 0);
 }
