@@ -34,7 +34,6 @@ public sealed class DiceEngine
         foreach (var rootId in roots)
         {
             var ctx = new EvalContext(_rng, limits.Value);
-            Console.WriteLine(evaluator.DumpTree(rootId));
             var value = evaluator.EvalInt(rootId, ref ctx);
 
             // Update RNG state so the engine is deterministic across calls but not fixed-per-expression

@@ -40,13 +40,13 @@ internal sealed class Evaluator
                 _ => throw new EvalException("Unknown binary op")
             },
 
-            NodeKind.Dice => EvalDice(n.A, n.B, ref ctx),
+            NodeKind.Dice => EvalDice(n.A, n.B, n.C, ref ctx),
 
             _ => throw new EvalException("Unknown node kind")
         };
     }
 
-    private int EvalDice(int countExprId, int dieExprId, ref EvalContext ctx)
+    private int EvalDice(int countExprId, int dieExprId, int modsHandle, ref EvalContext ctx)
     {
         int count = EvalInt(countExprId, ref ctx);
         int[] faces = EvalDieFaces(dieExprId, ref ctx);
@@ -63,22 +63,109 @@ internal sealed class Evaluator
         if (ctx.DiceRolled + count > _limits.MaxDicePerExpr)
             throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
 
-        int total = 0;
+        int rollStart = ctx.Rolls.Count;
 
         for (int i = 0; i < count; i++)
         {
             int faceIndex = ctx.Rng.NextInt(0, faces.Length);
             int roll = faces[faceIndex];
-
             ctx.Rolls.Add(roll);
-            total += roll;
         }
 
         ctx.DiceRolled += count;
 
-         // TODO: apply modifiers (explode/reroll/keep-drop/etc.) using modsHandle from Node.C later.
+        int total = SumRollRange(ctx.Rolls, rollStart, count);
+
+        // TODO: apply modifiers (explode/reroll/keep-drop/etc.) using modsHandle from Node.C later.
+        if (modsHandle != 0)
+        {
+            if (modsHandle < 1 || modsHandle > _pool.DiceModCount)
+                throw new EvalException("Invalid dice modifier handle.");
+
+            DiceMod mod = _pool.GetDiceModByHandle(modsHandle);
+
+            if (mod.N <= 0)
+                throw new EvalException("Keep/drop count must be positive.");
+
+            if (mod.N > count)
+                throw new EvalException("Keep/drop count cannot exceed number of dice rolled.");
+
+            total = SumKeepDrop(ctx.Rolls, rollStart, count, mod);
+        }
 
         return total;
+    }
+
+    private static int SumRollRange(List<int> rolls, int start, int count)
+    {
+        int sum = 0;
+        for (int i = 0; i < count; i++)
+            sum += rolls[start + i];
+        return sum;
+    }
+
+    /// <summary>
+    /// Stable ordering: sort by value, break ties by lower original index (earlier roll ranks first
+    /// for keep-highest and last for keep-lowest as appropriate).
+    /// </summary>
+    private static int SumKeepDrop(List<int> rolls, int start, int count, DiceMod mod)
+    {
+        if (count == 0)
+            return 0;
+
+        Span<int> order = stackalloc int[count];
+        for (int i = 0; i < count; i++)
+            order[i] = i;
+
+        int CompareKh(int a, int b)
+        {
+            int va = rolls[start + a];
+            int vb = rolls[start + b];
+            int c = vb.CompareTo(va);
+            return c != 0 ? c : a.CompareTo(b);
+        }
+
+        int CompareKl(int a, int b)
+        {
+            int va = rolls[start + a];
+            int vb = rolls[start + b];
+            int c = va.CompareTo(vb);
+            return c != 0 ? c : a.CompareTo(b);
+        }
+
+        switch (mod.Kind)
+        {
+            case DiceModKind.KeepHighest:
+                order.Sort(CompareKh);
+                return SumOrderedPrefix(rolls, start, order, mod.N);
+            case DiceModKind.KeepLowest:
+                order.Sort(CompareKl);
+                return SumOrderedPrefix(rolls, start, order, mod.N);
+            case DiceModKind.DropHighest:
+                order.Sort(CompareKh);
+                return SumOrderedSuffix(rolls, start, order, mod.N);
+            case DiceModKind.DropLowest:
+                order.Sort(CompareKl);
+                return SumOrderedSuffix(rolls, start, order, mod.N);
+            default:
+                return SumRollRange(rolls, start, count);
+        }
+    }
+
+    private static int SumOrderedPrefix(List<int> rolls, int start, ReadOnlySpan<int> order, int take)
+    {
+        int sum = 0;
+        for (int i = 0; i < take; i++)
+            sum += rolls[start + order[i]];
+        return sum;
+    }
+
+    private static int SumOrderedSuffix(List<int> rolls, int start, ReadOnlySpan<int> order, int drop)
+    {
+        int sum = 0;
+        for (int i = drop; i < order.Length; i++)
+            sum += rolls[start + order[i]];
+        return sum;
     }
 
     private int[] EvalDieFaces(int dieExprId, ref EvalContext ctx)

@@ -45,9 +45,21 @@ internal ref struct Lexer
             case ',': _i++; Current = new Token(TokenKind.Comma); return;
         }
 
-        // Dice operator
+        // Dice operator — do not split two-letter keep/drop tags 'dh' / 'dl' (otherwise '4d6dh1' breaks).
         if (c == 'd' || c == 'D')
         {
+            if (_i + 1 < _s.Length)
+            {
+                char n = _s[_i + 1];
+                if (n is 'h' or 'H' or 'l' or 'L')
+                {
+                    int start = _i;
+                    _i += 2;
+                    Current = new Token(TokenKind.Identifier, start: start, length: 2);
+                    return;
+                }
+            }
+
             _i++;
             Current = new Token(TokenKind.D);
             return;

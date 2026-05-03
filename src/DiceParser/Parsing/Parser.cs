@@ -1,3 +1,4 @@
+using System;
 using DiceParser.Ast;
 using DiceParser.Exceptions;
 using DiceParser.Lexing;
@@ -99,8 +100,8 @@ internal ref struct Parser
                         _lex.Next();
 
                         int sides = ParseExpression(lbp + 1); // bind tightly to right
-                                                                // Mods are not parsed yet; placeholder handle = 0
-                        left = AddNode(Node.Dice(left, sides, modsHandle: 0));
+                        int modsHandle = ParseOptionalDiceMods();
+                        left = AddNode(Node.Dice(left, sides, modsHandle));
                         break;
                     }
                 default:
@@ -201,8 +202,9 @@ internal ref struct Parser
                     // Implied count: d20 == 1d20
                     _lex.Next();
                     int sides = ParseExpression(71); // right binds tight
+                    int modsHandle = ParseOptionalDiceMods();
                     int one = AddNode(Node.Number(1));
-                    return AddNode(Node.Dice(one, sides, modsHandle: 0));
+                    return AddNode(Node.Dice(one, sides, modsHandle));
                 }
 
             default:
@@ -231,5 +233,36 @@ internal ref struct Parser
         if (_pool.Count > _limits.MaxNodes)
             throw new ParseException($"Expression too complex (max nodes {_limits.MaxNodes}).");
         return id;
+    }
+
+    /// <summary>Optional kh/kl/dh/dl + N immediately after the die expression.</summary>
+    private int ParseOptionalDiceMods()
+    {
+        if (_lex.Current.Kind != TokenKind.Identifier)
+            return 0;
+
+        ReadOnlySpan<char> id = _lex.SliceIdentifier(_lex.Current);
+
+        DiceModKind kind;
+        if (id.Equals("kh", StringComparison.OrdinalIgnoreCase))
+            kind = DiceModKind.KeepHighest;
+        else if (id.Equals("kl", StringComparison.OrdinalIgnoreCase))
+            kind = DiceModKind.KeepLowest;
+        else if (id.Equals("dh", StringComparison.OrdinalIgnoreCase))
+            kind = DiceModKind.DropHighest;
+        else if (id.Equals("dl", StringComparison.OrdinalIgnoreCase))
+            kind = DiceModKind.DropLowest;
+        else
+            throw new ParseException($"Unknown dice modifier '{new string(id)}'.");
+
+        _lex.Next();
+
+        if (_lex.Current.Kind != TokenKind.Number || _lex.Current.IntValue <= 0)
+            throw new ParseException("Expected positive integer after keep/drop dice modifier.");
+
+        int n = _lex.Current.IntValue;
+        _lex.Next();
+
+        return _pool.AddDiceMod(new DiceMod(kind, n));
     }
 }

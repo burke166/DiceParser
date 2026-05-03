@@ -9,7 +9,7 @@ internal readonly struct Node
     // Number:     Value used, A/B unused
     // Unary:      A = rhs
     // Binary:     A = lhs, B = rhs
-    // Dice:       A = countExpr, B = sidesExpr, C = mods handle (not used yet)
+    // Dice:       A = countExpr, B = sidesExpr, C = mods handle (1-based index in NodePool dice-mods list; 0 = none)
     // CustomDice: A = countExpr, C = mods handle (not used yet), Faces = faces array
     public readonly int A;
     public readonly int B;
