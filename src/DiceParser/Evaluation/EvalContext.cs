@@ -4,12 +4,12 @@ namespace DiceParser.Evaluation;
 
 internal struct EvalContext
 {
-    public IRng Rng;
+    public IDiceRandom Rng;
     public readonly Limits Limits;
     public int DiceRolled;
     public List<int> Rolls;
 
-    public EvalContext(IRng rng, Limits limits)
+    public EvalContext(IDiceRandom rng, Limits limits)
     {
         Rng = rng;
         Limits = limits;

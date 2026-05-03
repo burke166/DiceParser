@@ -33,11 +33,11 @@ public sealed class DiceEngine
         var results = new List<ProgramExpressionResult>(roots.Count);
         foreach (int rootId in roots)
         {
-            var adapter = new XoshiroRngAdapter(_rng);
-            var ctx = new EvalContext(adapter, limits.Value);
+            var diceRandom = new XoshiroDiceRandom(_rng);
+            var ctx = new EvalContext(diceRandom, limits.Value);
 
             ProgramExpressionResult item = BuildProgramResult(rootId, pool, evaluator, ref ctx);
-            _rng = adapter.State;
+            _rng = diceRandom.State;
             results.Add(item);
         }
 
@@ -45,7 +45,7 @@ public sealed class DiceEngine
     }
 
     /// <summary>For tests: evaluate with a supplied RNG (does not advance the engine seed state).</summary>
-    internal IReadOnlyList<ProgramExpressionResult> ExecuteWithRng(string input, IRng rng, Limits? limits = null)
+    internal IReadOnlyList<ProgramExpressionResult> ExecuteWithRng(string input, IDiceRandom rng, Limits? limits = null)
     {
         limits ??= Limits.Default;
 

@@ -1,6 +1,6 @@
-namespace DiceParser.Random;
+namespace DiceParser;
 
-internal interface IRng
+internal interface IDiceRandom
 {
     int NextInt(int minInclusive, int maxExclusive);
 }
