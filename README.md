@@ -120,4 +120,4 @@ Game-specific concepts (like advantage/disadvantage) should be implemented in co
 
 ## 📄 License
 
-MIT (or your chosen license)
+MIT
