@@ -43,6 +43,36 @@ internal ref struct Lexer
             case '{': _i++; Current = new Token(TokenKind.LBrace); return;
             case '}': _i++; Current = new Token(TokenKind.RBrace); return;
             case ',': _i++; Current = new Token(TokenKind.Comma); return;
+            case '>': _i++; Current = new Token(TokenKind.Greater); return;
+            case '<': _i++; Current = new Token(TokenKind.Less); return;
+        }
+
+        if (c == '!')
+        {
+            if (_i + 1 < _s.Length && _s[_i + 1] == '!')
+            {
+                _i += 2;
+                if (_i < _s.Length && (_s[_i] == 'p' || _s[_i] == 'P'))
+                {
+                    _i++;
+                    Current = new Token(TokenKind.ExplodeCompoundPenetrating);
+                    return;
+                }
+
+                Current = new Token(TokenKind.ExplodeCompound);
+                return;
+            }
+
+            if (_i + 1 < _s.Length && (_s[_i + 1] == 'p' || _s[_i + 1] == 'P'))
+            {
+                _i += 2;
+                Current = new Token(TokenKind.ExplodePenetrating);
+                return;
+            }
+
+            _i++;
+            Current = new Token(TokenKind.ExplodeStandard);
+            return;
         }
 
         // Dice operator — do not split two-letter keep/drop tags 'dh' / 'dl' (otherwise '4d6dh1' breaks).

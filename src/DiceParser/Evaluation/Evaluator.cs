@@ -49,7 +49,8 @@ internal sealed class Evaluator
     private int EvalDice(int countExprId, int dieExprId, int modsHandle, ref EvalContext ctx)
     {
         int count = EvalInt(countExprId, ref ctx);
-        int[] faces = EvalDieFaces(dieExprId, ref ctx);
+        int[] facesArr = EvalDieFaces(dieExprId, ref ctx);
+        ReadOnlySpan<int> faces = facesArr;
 
         if (count < 0)
             throw new EvalException("Dice count cannot be negative.");
@@ -60,40 +61,192 @@ internal sealed class Evaluator
         if (faces.Length > _limits.MaxSides)
             throw new EvalException($"Dice sides too large (max {_limits.MaxSides}).");
 
-        if (ctx.DiceRolled + count > _limits.MaxDicePerExpr)
-            throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
-
-        int rollStart = ctx.Rolls.Count;
-
-        for (int i = 0; i < count; i++)
+        DiceRollMods modsBundle = default;
+        bool hasMods = modsHandle != 0;
+        if (hasMods)
         {
-            int faceIndex = ctx.Rng.NextInt(0, faces.Length);
-            int roll = faces[faceIndex];
-            ctx.Rolls.Add(roll);
-        }
-
-        ctx.DiceRolled += count;
-
-        int total = SumRollRange(ctx.Rolls, rollStart, count);
-
-        // TODO: apply modifiers (explode/reroll/keep-drop/etc.) using modsHandle from Node.C later.
-        if (modsHandle != 0)
-        {
-            if (modsHandle < 1 || modsHandle > _pool.DiceModCount)
+            if (modsHandle < 1 || modsHandle > _pool.DiceRollModsCount)
                 throw new EvalException("Invalid dice modifier handle.");
 
-            DiceMod mod = _pool.GetDiceModByHandle(modsHandle);
+            modsBundle = _pool.GetDiceRollModsByHandle(modsHandle);
+            if (modsBundle.Explode.HasExplode)
+                ValidateExplodeCompare(modsBundle.Explode, faces);
+        }
 
-            if (mod.N <= 0)
+        int rollStart = ctx.Rolls.Count;
+        var segment = new List<int>(Math.Max(count * 2, 8));
+
+        bool explode = hasMods && modsBundle.Explode.HasExplode;
+        if (!explode)
+        {
+            if (ctx.DiceRolled + count > _limits.MaxDicePerExpr)
+                throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
+
+            for (int i = 0; i < count; i++)
+                segment.Add(RollOneDie(ref ctx, faces));
+        }
+        else
+        {
+            ExplodeSpec spec = modsBundle.Explode;
+            switch (spec.Mode)
+            {
+                case ExplodeMode.Standard:
+                    for (int i = 0; i < count; i++)
+                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, penetrating: false);
+                    break;
+                case ExplodeMode.Compound:
+                    for (int i = 0; i < count; i++)
+                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, penetrating: false));
+                    break;
+                case ExplodeMode.CompoundPenetrating:
+                    for (int i = 0; i < count; i++)
+                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, penetrating: true));
+                    break;
+                case ExplodeMode.Penetrating:
+                    for (int i = 0; i < count; i++)
+                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, penetrating: true);
+                    break;
+                default:
+                    throw new EvalException("Unknown explode mode.");
+            }
+        }
+
+        foreach (int v in segment)
+            ctx.Rolls.Add(v);
+
+        int finalCount = segment.Count;
+        DiceMod kd = hasMods ? modsBundle.KeepDrop : default;
+
+        int total;
+        if (kd.Kind != DiceModKind.None)
+        {
+            if (kd.N <= 0)
                 throw new EvalException("Keep/drop count must be positive.");
 
-            if (mod.N > count)
+            if (kd.N > finalCount)
                 throw new EvalException("Keep/drop count cannot exceed number of dice rolled.");
 
-            total = SumKeepDrop(ctx.Rolls, rollStart, count, mod);
+            total = SumKeepDrop(ctx.Rolls, rollStart, finalCount, kd);
+        }
+        else
+        {
+            total = SumRollRange(ctx.Rolls, rollStart, finalCount);
         }
 
         return total;
+    }
+
+    private void TryConsumeRollBudget(ref EvalContext ctx)
+    {
+        if (ctx.DiceRolled >= _limits.MaxDicePerExpr)
+            throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
+
+        ctx.DiceRolled++;
+    }
+
+    private int RollOneDie(ref EvalContext ctx, ReadOnlySpan<int> faces)
+    {
+        TryConsumeRollBudget(ref ctx);
+        int faceIndex = ctx.Rng.NextInt(0, faces.Length);
+        return faces[faceIndex];
+    }
+
+    private void AppendStandardExplodingChain(
+        List<int> segment,
+        ref EvalContext ctx,
+        ReadOnlySpan<int> faces,
+        ExplodeSpec spec,
+        bool penetrating)
+    {
+        int roll = RollOneDie(ref ctx, faces);
+        segment.Add(roll);
+
+        while (ShouldExplode(roll, faces, spec))
+        {
+            roll = RollOneDie(ref ctx, faces);
+            int add = penetrating ? roll - 1 : roll;
+            segment.Add(add);
+        }
+    }
+
+    /// <summary>
+    /// Compounds one die and its explosion chain into a single value. When <paramref name="penetrating"/> is true,
+    /// the first roll counts in full; each subsequent explosion roll adds <c>raw - 1</c> to the sum while raw values
+    /// still control whether exploding continues.
+    /// </summary>
+    private int RollCompoundExplodingChain(ref EvalContext ctx, ReadOnlySpan<int> faces, ExplodeSpec spec, bool penetrating)
+    {
+        int sum = RollOneDie(ref ctx, faces);
+        int lastRoll = sum;
+
+        while (ShouldExplode(lastRoll, faces, spec))
+        {
+            lastRoll = RollOneDie(ref ctx, faces);
+            sum += penetrating ? lastRoll - 1 : lastRoll;
+        }
+
+        return sum;
+    }
+
+    private static bool ShouldExplode(int roll, ReadOnlySpan<int> faces, ExplodeSpec spec)
+    {
+        int maxF = MaxFace(faces);
+
+        return spec.Compare switch
+        {
+            ExplodeCompareKind.EqualMax => roll == maxF,
+            ExplodeCompareKind.EqualN => roll == spec.N,
+            ExplodeCompareKind.GreaterOrEqualN => roll >= spec.N,
+            ExplodeCompareKind.LessOrEqualN => roll <= spec.N,
+            _ => false
+        };
+    }
+
+    private static void ValidateExplodeCompare(ExplodeSpec spec, ReadOnlySpan<int> faces)
+    {
+        if (!spec.HasExplode)
+            return;
+
+        int minF = MinFace(faces);
+        int maxF = MaxFace(faces);
+
+        switch (spec.Compare)
+        {
+            case ExplodeCompareKind.EqualMax:
+                return;
+            case ExplodeCompareKind.EqualN:
+            case ExplodeCompareKind.GreaterOrEqualN:
+            case ExplodeCompareKind.LessOrEqualN:
+                if (spec.N < minF || spec.N > maxF)
+                    throw new EvalException($"Explode compare value must be between {minF} and {maxF} for this die.");
+                break;
+            default:
+                return;
+        }
+    }
+
+    private static int MinFace(ReadOnlySpan<int> faces)
+    {
+        int m = faces[0];
+        for (int i = 1; i < faces.Length; i++)
+        {
+            if (faces[i] < m)
+                m = faces[i];
+        }
+
+        return m;
+    }
+
+    private static int MaxFace(ReadOnlySpan<int> faces)
+    {
+        int m = faces[0];
+        for (int i = 1; i < faces.Length; i++)
+        {
+            if (faces[i] > m)
+                m = faces[i];
+        }
+
+        return m;
     }
 
     private static int SumRollRange(List<int> rolls, int start, int count)
@@ -112,6 +265,9 @@ internal sealed class Evaluator
     {
         if (count == 0)
             return 0;
+
+        if (mod.Kind == DiceModKind.None)
+            return SumRollRange(rolls, start, count);
 
         Span<int> order = stackalloc int[count];
         for (int i = 0; i < count; i++)
@@ -261,11 +417,10 @@ internal sealed class Evaluator
                 $"Binary {node.Op}",
 
             NodeKind.Dice =>
-                "Dice",
+                $"Dice mods#{node.C}",
 
             _ =>
                 node.Kind.ToString()
         };
     }
-
 }

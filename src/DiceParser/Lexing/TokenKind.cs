@@ -11,6 +11,14 @@ internal enum TokenKind : byte
     Comma,
     Semicolon,
 
+    Greater, // '>' (explode compare)
+    Less,    // '<' (explode compare)
+
+    ExplodeStandard,     // '!'
+    ExplodeCompound,     // '!!'
+    ExplodePenetrating,   // '!p' / '!P'
+    ExplodeCompoundPenetrating, // '!!p' / '!!P'
+
     D,          // 'd' or 'D'
-    Identifier, // for future modifiers, e.g., 'kh', 'ro', etc.
+    Identifier, // e.g. 'kh', 'kl'
 }

@@ -5,7 +5,7 @@ namespace DiceParser.Ast;
 internal sealed class NodePool
 {
     private readonly List<Node> _nodes;
-    private readonly List<DiceMod> _diceMods = new(capacity: 8);
+    private readonly List<DiceRollMods> _diceRollMods = new(capacity: 8);
 
     public NodePool(int capacity)
     {
@@ -21,16 +21,16 @@ internal sealed class NodePool
         return id;
     }
 
-    /// <summary>1-based handle; 0 means no modifier.</summary>
-    public int AddDiceMod(DiceMod mod)
+    /// <summary>1-based handle; 0 means no modifiers.</summary>
+    public int AddDiceRollMods(DiceRollMods mods)
     {
-        _diceMods.Add(mod);
-        return _diceMods.Count;
+        _diceRollMods.Add(mods);
+        return _diceRollMods.Count;
     }
 
-    internal int DiceModCount => _diceMods.Count;
+    internal int DiceRollModsCount => _diceRollMods.Count;
 
-    internal DiceMod GetDiceModByHandle(int oneBasedHandle) => _diceMods[oneBasedHandle - 1];
+    internal DiceRollMods GetDiceRollModsByHandle(int oneBasedHandle) => _diceRollMods[oneBasedHandle - 1];
 
     public ref readonly Node this[int id] => ref CollectionsMarshal.AsSpan(_nodes)[id];
 }

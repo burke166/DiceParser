@@ -4,12 +4,12 @@ namespace DiceParser.Evaluation;
 
 internal struct EvalContext
 {
-    public Xoshiro256StarStar Rng;
+    public IRng Rng;
     public readonly Limits Limits;
     public int DiceRolled;
     public List<int> Rolls;
 
-    public EvalContext(Xoshiro256StarStar rng, Limits limits)
+    public EvalContext(IRng rng, Limits limits)
     {
         Rng = rng;
         Limits = limits;

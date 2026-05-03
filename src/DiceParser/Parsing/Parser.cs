@@ -1,4 +1,3 @@
-using System;
 using DiceParser.Ast;
 using DiceParser.Exceptions;
 using DiceParser.Lexing;
@@ -235,11 +234,83 @@ internal ref struct Parser
         return id;
     }
 
-    /// <summary>Optional kh/kl/dh/dl + N immediately after the die expression.</summary>
+    /// <summary>Optional explode (! / !! / !!p / !p and compare tail), then optional kh/kl/dh/dl + N.</summary>
     private int ParseOptionalDiceMods()
     {
-        if (_lex.Current.Kind != TokenKind.Identifier)
+        ExplodeSpec explode = ParseOptionalExplodePrefix();
+        DiceMod keepDrop = ParseOptionalKeepDropSuffix();
+
+        var bundle = new DiceRollMods(explode, keepDrop);
+        if (bundle.IsEmpty)
             return 0;
+
+        return _pool.AddDiceRollMods(bundle);
+    }
+
+    private ExplodeSpec ParseOptionalExplodePrefix()
+    {
+        ExplodeMode mode;
+        switch (_lex.Current.Kind)
+        {
+            case TokenKind.ExplodeCompound:
+                _lex.Next();
+                mode = ExplodeMode.Compound;
+                break;
+            case TokenKind.ExplodeCompoundPenetrating:
+                _lex.Next();
+                mode = ExplodeMode.CompoundPenetrating;
+                break;
+            case TokenKind.ExplodePenetrating:
+                _lex.Next();
+                mode = ExplodeMode.Penetrating;
+                break;
+            case TokenKind.ExplodeStandard:
+                _lex.Next();
+                mode = ExplodeMode.Standard;
+                break;
+            default:
+                return default;
+        }
+
+        return ParseExplodeCompareTail(mode);
+    }
+
+    private ExplodeSpec ParseExplodeCompareTail(ExplodeMode mode)
+    {
+        ExplodeCompareKind cmp = ExplodeCompareKind.EqualMax;
+        int n = 0;
+
+        switch (_lex.Current.Kind)
+        {
+            case TokenKind.Greater:
+                _lex.Next();
+                cmp = ExplodeCompareKind.GreaterOrEqualN;
+                n = ParseSignedIntegerLiteral();
+                break;
+            case TokenKind.Less:
+                _lex.Next();
+                cmp = ExplodeCompareKind.LessOrEqualN;
+                n = ParseSignedIntegerLiteral();
+                break;
+            case TokenKind.Number:
+                cmp = ExplodeCompareKind.EqualN;
+                n = _lex.Current.IntValue;
+                _lex.Next();
+                break;
+            case TokenKind.Plus:
+            case TokenKind.Minus:
+                cmp = ExplodeCompareKind.EqualN;
+                n = ParseSignedIntegerLiteral();
+                break;
+        }
+
+        return new ExplodeSpec(mode, cmp, n);
+    }
+
+    private DiceMod ParseOptionalKeepDropSuffix()
+    {
+        if (_lex.Current.Kind != TokenKind.Identifier)
+            return default;
 
         ReadOnlySpan<char> id = _lex.SliceIdentifier(_lex.Current);
 
@@ -263,6 +334,6 @@ internal ref struct Parser
         int n = _lex.Current.IntValue;
         _lex.Next();
 
-        return _pool.AddDiceMod(new DiceMod(kind, n));
+        return new DiceMod(kind, n);
     }
 }
