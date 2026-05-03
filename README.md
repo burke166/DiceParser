@@ -1,5 +1,7 @@
 # DiceParser
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 DiceParser is a flexible, extensible dice expression parser and evaluator written in C#. It is designed as a **general-purpose dice engine** suitable for tabletop RPGs, simulations, and custom game systems.
 
 The library supports a rich grammar for dice expressions, including exploding dice, rerolls, success counting, custom dice, and more—while remaining system-agnostic.
