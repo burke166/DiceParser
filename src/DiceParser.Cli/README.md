@@ -12,14 +12,10 @@ DiceParser.Cli is a command-line interface for the DiceParser library. It serves
 Run from the command line:
 
 ```bash
-dotnet run -- "expression"
+dotnet run
 ```
 
-Example:
-
-```bash
-dotnet run -- "2d20kh1+5"
-```
+DiceParse.Cli will open as an interactive text application.
 
 ---
 
@@ -56,13 +52,15 @@ The CLI supports all DiceParser syntax:
 
 ### Multiple Rolls
 - Use `;`
-  ```bash
-  dotnet run -- "1d20;2d6+3"
+  ```
+  "1d20;2d6+3"
   ```
 
 ### Named Groups
-```bash
-dotnet run -- "{attack:1d20;damage:2d6+3}"
+- Use `{}` to create a named-group set. Use `,` to separate groups.
+
+```
+dotnet run -- "{attack:1d20,damage:2d6+3}"
 ```
 
 ---
@@ -86,8 +84,8 @@ The CLI displays:
 
 ## 🔧 Example
 
-```bash
-dotnet run -- "4d6kh3"
+```
+"4d6kh3"
 ```
 
 Output (example):
