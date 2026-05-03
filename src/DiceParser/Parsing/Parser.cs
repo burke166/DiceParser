@@ -308,6 +308,28 @@ internal ref struct Parser
     private int ParsePrefix(bool customDieBracesOnly)
     {
         var tok = _lex.Current;
+
+        // Fudge/Fate: `dF` / `df` lowers to the same `CustomDie` faces as `d{-1,0,1}` (only valid as dice sides).
+        // The lexer merges letters, so `4dFkh3` becomes `Fkh`; peel a leading `F`/`f` unless it starts `FF`/`Ff`/…
+        if (customDieBracesOnly && tok.Kind == TokenKind.Identifier && tok.Length > 0)
+        {
+            ReadOnlySpan<char> id = _lex.SliceIdentifier(tok);
+            if (id[0] is 'F' or 'f')
+            {
+                if (id.Length == 1)
+                {
+                    _lex.Next();
+                    return AddNode(Node.CustomDie(new[] { -1, 0, 1 }));
+                }
+
+                if (id[1] is not ('F' or 'f'))
+                {
+                    _lex.ResyncAt(tok.Start + 1);
+                    return AddNode(Node.CustomDie(new[] { -1, 0, 1 }));
+                }
+            }
+        }
+
         switch (tok.Kind)
         {
             case TokenKind.Number:
