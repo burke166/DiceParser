@@ -234,13 +234,14 @@ internal ref struct Parser
         return id;
     }
 
-    /// <summary>Optional explode (! / !! / !!p / !p and compare tail), then optional kh/kl/dh/dl + N.</summary>
+    /// <summary>Optional explode (! / !! / !!p / !p and compare tail), optional kh/kl/dh/dl + N, optional &gt;=N success count.</summary>
     private int ParseOptionalDiceMods()
     {
         ExplodeSpec explode = ParseOptionalExplodePrefix();
         DiceMod keepDrop = ParseOptionalKeepDropSuffix();
+        (bool hasSuccess, int successAtLeast) = ParseOptionalSuccessCountSuffix();
 
-        var bundle = new DiceRollMods(explode, keepDrop);
+        var bundle = new DiceRollMods(explode, keepDrop, hasSuccess, successAtLeast);
         if (bundle.IsEmpty)
             return 0;
 
@@ -335,5 +336,16 @@ internal ref struct Parser
         _lex.Next();
 
         return new DiceMod(kind, n);
+    }
+
+    /// <summary>Roll20-style <c>&gt;=N</c> after explode/keep-drop; not an arithmetic comparison.</summary>
+    private (bool HasSuccess, int AtLeast) ParseOptionalSuccessCountSuffix()
+    {
+        if (_lex.Current.Kind != TokenKind.GreaterEqual)
+            return (false, 0);
+
+        _lex.Next();
+        int n = ParseSignedIntegerLiteral();
+        return (true, n);
     }
 }

@@ -43,7 +43,17 @@ internal ref struct Lexer
             case '{': _i++; Current = new Token(TokenKind.LBrace); return;
             case '}': _i++; Current = new Token(TokenKind.RBrace); return;
             case ',': _i++; Current = new Token(TokenKind.Comma); return;
-            case '>': _i++; Current = new Token(TokenKind.Greater); return;
+            case '>':
+                _i++;
+                if (_i < _s.Length && _s[_i] == '=')
+                {
+                    _i++;
+                    Current = new Token(TokenKind.GreaterEqual);
+                    return;
+                }
+
+                Current = new Token(TokenKind.Greater);
+                return;
             case '<': _i++; Current = new Token(TokenKind.Less); return;
         }
 

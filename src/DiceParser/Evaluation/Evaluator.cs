@@ -117,6 +117,23 @@ internal sealed class Evaluator
         int finalCount = segment.Count;
         DiceMod kd = hasMods ? modsBundle.KeepDrop : default;
 
+        if (hasMods && modsBundle.HasSuccessCount)
+        {
+            int thr = modsBundle.SuccessAtLeast;
+            if (kd.Kind != DiceModKind.None)
+            {
+                if (kd.N <= 0)
+                    throw new EvalException("Keep/drop count must be positive.");
+
+                if (kd.N > finalCount)
+                    throw new EvalException("Keep/drop count cannot exceed number of dice rolled.");
+
+                return CountKeepDropSuccesses(ctx.Rolls, rollStart, finalCount, kd, thr);
+            }
+
+            return CountSuccessesInRange(ctx.Rolls, rollStart, finalCount, thr);
+        }
+
         int total;
         if (kd.Kind != DiceModKind.None)
         {
@@ -322,6 +339,90 @@ internal sealed class Evaluator
         for (int i = drop; i < order.Length; i++)
             sum += rolls[start + order[i]];
         return sum;
+    }
+
+    private static int CountSuccessesInRange(List<int> rolls, int start, int count, int atLeast)
+    {
+        int c = 0;
+        for (int i = 0; i < count; i++)
+        {
+            if (rolls[start + i] >= atLeast)
+                c++;
+        }
+
+        return c;
+    }
+
+    /// <summary>Same kept/dropped slice as <see cref="SumKeepDrop"/>; counts entries with value &gt;= <paramref name="atLeast"/>.</summary>
+    private static int CountKeepDropSuccesses(List<int> rolls, int start, int count, DiceMod mod, int atLeast)
+    {
+        if (count == 0)
+            return 0;
+
+        if (mod.Kind == DiceModKind.None)
+            return CountSuccessesInRange(rolls, start, count, atLeast);
+
+        Span<int> order = stackalloc int[count];
+        for (int i = 0; i < count; i++)
+            order[i] = i;
+
+        int CompareKh(int a, int b)
+        {
+            int va = rolls[start + a];
+            int vb = rolls[start + b];
+            int c = vb.CompareTo(va);
+            return c != 0 ? c : a.CompareTo(b);
+        }
+
+        int CompareKl(int a, int b)
+        {
+            int va = rolls[start + a];
+            int vb = rolls[start + b];
+            int c = va.CompareTo(vb);
+            return c != 0 ? c : a.CompareTo(b);
+        }
+
+        switch (mod.Kind)
+        {
+            case DiceModKind.KeepHighest:
+                order.Sort(CompareKh);
+                return CountOrderedPrefixSuccesses(rolls, start, order, mod.N, atLeast);
+            case DiceModKind.KeepLowest:
+                order.Sort(CompareKl);
+                return CountOrderedPrefixSuccesses(rolls, start, order, mod.N, atLeast);
+            case DiceModKind.DropHighest:
+                order.Sort(CompareKh);
+                return CountOrderedSuffixSuccesses(rolls, start, order, mod.N, atLeast);
+            case DiceModKind.DropLowest:
+                order.Sort(CompareKl);
+                return CountOrderedSuffixSuccesses(rolls, start, order, mod.N, atLeast);
+            default:
+                return CountSuccessesInRange(rolls, start, count, atLeast);
+        }
+    }
+
+    private static int CountOrderedPrefixSuccesses(List<int> rolls, int start, ReadOnlySpan<int> order, int take, int atLeast)
+    {
+        int c = 0;
+        for (int i = 0; i < take; i++)
+        {
+            if (rolls[start + order[i]] >= atLeast)
+                c++;
+        }
+
+        return c;
+    }
+
+    private static int CountOrderedSuffixSuccesses(List<int> rolls, int start, ReadOnlySpan<int> order, int drop, int atLeast)
+    {
+        int c = 0;
+        for (int i = drop; i < order.Length; i++)
+        {
+            if (rolls[start + order[i]] >= atLeast)
+                c++;
+        }
+
+        return c;
     }
 
     private int[] EvalDieFaces(int dieExprId, ref EvalContext ctx)

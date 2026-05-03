@@ -11,8 +11,9 @@ internal enum TokenKind : byte
     Comma,
     Semicolon,
 
-    Greater, // '>' (explode compare)
-    Less,    // '<' (explode compare)
+    Greater,       // '>' (explode compare; not part of '>=')
+    GreaterEqual,  // '>=' (success counting on dice expressions)
+    Less,          // '<' (explode compare)
 
     ExplodeStandard,     // '!'
     ExplodeCompound,     // '!!'
