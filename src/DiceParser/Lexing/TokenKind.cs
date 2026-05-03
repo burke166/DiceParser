@@ -14,6 +14,7 @@ internal enum TokenKind : byte
     Greater,       // '>' (explode compare; not part of '>=')
     GreaterEqual,  // '>=' (success counting on dice expressions)
     Less,          // '<' (explode compare)
+    Equal,         // '=' (reroll / explode exact compare)
 
     ExplodeStandard,     // '!'
     ExplodeCompound,     // '!!'

@@ -55,6 +55,7 @@ internal ref struct Lexer
                 Current = new Token(TokenKind.Greater);
                 return;
             case '<': _i++; Current = new Token(TokenKind.Less); return;
+            case '=': _i++; Current = new Token(TokenKind.Equal); return;
         }
 
         if (c == '!')

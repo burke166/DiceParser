@@ -234,18 +234,72 @@ internal ref struct Parser
         return id;
     }
 
-    /// <summary>Optional explode (! / !! / !!p / !p and compare tail), optional kh/kl/dh/dl + N, optional &gt;=N success count.</summary>
+    /// <summary>Optional reroll (<c>r</c>/<c>ro</c>) before or after explode, optional explode, optional keep/drop, optional &gt;=N success count.</summary>
     private int ParseOptionalDiceMods()
     {
+        RerollSpec prefixReroll = TryParseRerollSuffix();
         ExplodeSpec explode = ParseOptionalExplodePrefix();
+        RerollSpec tailReroll = TryParseRerollSuffix();
+
+        if (prefixReroll.HasReroll && tailReroll.HasReroll)
+            throw new ParseException("Duplicate reroll modifier.");
+
+        RerollSpec reroll = prefixReroll.HasReroll ? prefixReroll : tailReroll;
+
         DiceMod keepDrop = ParseOptionalKeepDropSuffix();
         (bool hasSuccess, int successAtLeast) = ParseOptionalSuccessCountSuffix();
 
-        var bundle = new DiceRollMods(explode, keepDrop, hasSuccess, successAtLeast);
+        var bundle = new DiceRollMods(explode, reroll, keepDrop, hasSuccess, successAtLeast);
         if (bundle.IsEmpty)
             return 0;
 
         return _pool.AddDiceRollMods(bundle);
+    }
+
+    private RerollSpec TryParseRerollSuffix()
+    {
+        if (_lex.Current.Kind != TokenKind.Identifier)
+            return default;
+
+        ReadOnlySpan<char> id = _lex.SliceIdentifier(_lex.Current);
+        bool once;
+        if (id.Equals("ro", StringComparison.OrdinalIgnoreCase))
+            once = true;
+        else if (id.Equals("r", StringComparison.OrdinalIgnoreCase))
+            once = false;
+        else
+            return default;
+
+        _lex.Next();
+        (RerollCompareKind cmp, int n) = ParseRerollCompareTail();
+        return new RerollSpec(once, cmp, n);
+    }
+
+    private (RerollCompareKind Cmp, int N) ParseRerollCompareTail()
+    {
+        switch (_lex.Current.Kind)
+        {
+            case TokenKind.Greater:
+                _lex.Next();
+                return (RerollCompareKind.GreaterOrEqual, ParseSignedIntegerLiteral());
+            case TokenKind.Less:
+                _lex.Next();
+                return (RerollCompareKind.LessOrEqual, ParseSignedIntegerLiteral());
+            case TokenKind.Equal:
+                _lex.Next();
+                return (RerollCompareKind.Equal, ParseSignedIntegerLiteral());
+            case TokenKind.Number:
+                {
+                    int n = _lex.Current.IntValue;
+                    _lex.Next();
+                    return (RerollCompareKind.Equal, n);
+                }
+            case TokenKind.Plus:
+            case TokenKind.Minus:
+                return (RerollCompareKind.Equal, ParseSignedIntegerLiteral());
+            default:
+                throw new ParseException("Expected reroll threshold after 'r' or 'ro'.");
+        }
     }
 
     private ExplodeSpec ParseOptionalExplodePrefix()

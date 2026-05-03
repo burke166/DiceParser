@@ -6,6 +6,8 @@ namespace DiceParser.Evaluation;
 
 internal sealed class Evaluator
 {
+    private const int MaxRerollIterations = 100;
+
     private readonly NodePool _pool;
     private readonly Limits _limits;
 
@@ -71,11 +73,14 @@ internal sealed class Evaluator
             modsBundle = _pool.GetDiceRollModsByHandle(modsHandle);
             if (modsBundle.Explode.HasExplode)
                 ValidateExplodeCompare(modsBundle.Explode, faces);
+            if (modsBundle.Reroll.HasReroll)
+                ValidateContinuousRerollLessOrEqual(modsBundle.Reroll, faces);
         }
 
         int rollStart = ctx.Rolls.Count;
         var segment = new List<int>(Math.Max(count * 2, 8));
 
+        RerollSpec reroll = hasMods ? modsBundle.Reroll : default;
         bool explode = hasMods && modsBundle.Explode.HasExplode;
         if (!explode)
         {
@@ -83,7 +88,7 @@ internal sealed class Evaluator
                 throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
 
             for (int i = 0; i < count; i++)
-                segment.Add(RollOneDie(ref ctx, faces));
+                segment.Add(RollWithRerolls(ref ctx, faces, reroll));
         }
         else
         {
@@ -92,19 +97,19 @@ internal sealed class Evaluator
             {
                 case ExplodeMode.Standard:
                     for (int i = 0; i < count; i++)
-                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, penetrating: false);
+                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, reroll, penetrating: false);
                     break;
                 case ExplodeMode.Compound:
                     for (int i = 0; i < count; i++)
-                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, penetrating: false));
+                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, reroll, penetrating: false));
                     break;
                 case ExplodeMode.CompoundPenetrating:
                     for (int i = 0; i < count; i++)
-                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, penetrating: true));
+                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, reroll, penetrating: true));
                     break;
                 case ExplodeMode.Penetrating:
                     for (int i = 0; i < count; i++)
-                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, penetrating: true);
+                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, reroll, penetrating: true);
                     break;
                 default:
                     throw new EvalException("Unknown explode mode.");
@@ -168,19 +173,60 @@ internal sealed class Evaluator
         return faces[faceIndex];
     }
 
+    private static bool RerollConditionMatches(int roll, RerollSpec spec)
+    {
+        if (!spec.HasReroll)
+            return false;
+
+        return spec.Compare switch
+        {
+            RerollCompareKind.Equal => roll == spec.N,
+            RerollCompareKind.LessOrEqual => roll <= spec.N,
+            RerollCompareKind.GreaterOrEqual => roll >= spec.N,
+            _ => false
+        };
+    }
+
+    /// <summary>Roll one face, then apply reroll (<c>r</c>/<c>ro</c>) before any explode handling sees the value.</summary>
+    private int RollWithRerolls(ref EvalContext ctx, ReadOnlySpan<int> faces, RerollSpec spec)
+    {
+        int roll = RollOneDie(ref ctx, faces);
+        if (!spec.HasReroll)
+            return roll;
+
+        if (spec.Once)
+        {
+            if (RerollConditionMatches(roll, spec))
+                roll = RollOneDie(ref ctx, faces);
+            return roll;
+        }
+
+        int iterations = 0;
+        while (RerollConditionMatches(roll, spec))
+        {
+            if (++iterations > MaxRerollIterations)
+                throw new EvalException($"Reroll limit exceeded (max {MaxRerollIterations} replacements per die).");
+
+            roll = RollOneDie(ref ctx, faces);
+        }
+
+        return roll;
+    }
+
     private void AppendStandardExplodingChain(
         List<int> segment,
         ref EvalContext ctx,
         ReadOnlySpan<int> faces,
         ExplodeSpec spec,
+        RerollSpec reroll,
         bool penetrating)
     {
-        int roll = RollOneDie(ref ctx, faces);
+        int roll = RollWithRerolls(ref ctx, faces, reroll);
         segment.Add(roll);
 
         while (ShouldExplode(roll, faces, spec))
         {
-            roll = RollOneDie(ref ctx, faces);
+            roll = RollWithRerolls(ref ctx, faces, reroll);
             int add = penetrating ? roll - 1 : roll;
             segment.Add(add);
         }
@@ -191,14 +237,14 @@ internal sealed class Evaluator
     /// the first roll counts in full; each subsequent explosion roll adds <c>raw - 1</c> to the sum while raw values
     /// still control whether exploding continues.
     /// </summary>
-    private int RollCompoundExplodingChain(ref EvalContext ctx, ReadOnlySpan<int> faces, ExplodeSpec spec, bool penetrating)
+    private int RollCompoundExplodingChain(ref EvalContext ctx, ReadOnlySpan<int> faces, ExplodeSpec spec, RerollSpec reroll, bool penetrating)
     {
-        int sum = RollOneDie(ref ctx, faces);
+        int sum = RollWithRerolls(ref ctx, faces, reroll);
         int lastRoll = sum;
 
         while (ShouldExplode(lastRoll, faces, spec))
         {
-            lastRoll = RollOneDie(ref ctx, faces);
+            lastRoll = RollWithRerolls(ref ctx, faces, reroll);
             sum += penetrating ? lastRoll - 1 : lastRoll;
         }
 
@@ -217,6 +263,21 @@ internal sealed class Evaluator
             ExplodeCompareKind.LessOrEqualN => roll <= spec.N,
             _ => false
         };
+    }
+
+    /// <summary>Continuous <c>r&lt;N</c> means reroll while <c>roll ≤ N</c>; if <c>N</c> is at least the die’s highest face, every outcome matches and rerolls never stop.</summary>
+    private static void ValidateContinuousRerollLessOrEqual(RerollSpec spec, ReadOnlySpan<int> faces)
+    {
+        if (!spec.HasReroll || spec.Once)
+            return;
+
+        if (spec.Compare != RerollCompareKind.LessOrEqual)
+            return;
+
+        int maxF = MaxFace(faces);
+        if (spec.N >= maxF)
+            throw new EvalException(
+                $"Continuous reroll 'r<{spec.N}' cannot complete on this die (threshold must be less than the highest face value {maxF}).");
     }
 
     private static void ValidateExplodeCompare(ExplodeSpec spec, ReadOnlySpan<int> faces)
