@@ -38,6 +38,10 @@ docker/certbot/www/*
 sample_files/
 sample_files/*
 
+# Test Artifacts
+coverage-report/
+TestResults/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
