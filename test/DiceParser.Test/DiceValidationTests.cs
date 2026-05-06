@@ -103,4 +103,28 @@ public class DiceValidationTests
         // Act & Assert — missing ')' on the sides operand
         Assert.Throws<ParseException>(() => _ = engine.Execute("(1+2)d(6"));
     }
+
+    [Fact]
+    public void N_equals_R_counts_against_MaxProgramExprs_limit()
+    {
+        // Arrange
+        var tight = Limits.Default with { MaxProgramExprs = 4 };
+        var engine = new DiceEngine(1);
+
+        // Act & Assert
+        var ex = Assert.Throws<ParseException>(() => _ = engine.Execute("1d6n=5", tight));
+        Assert.Contains("too many expressions", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void N_equals_requires_positive_integer_repeat_count()
+    {
+        // Arrange
+        var engine = new DiceEngine(1);
+
+        // Act & Assert
+        Assert.Throws<ParseException>(() => _ = engine.Execute("1d6n=0"));
+        Assert.Throws<ParseException>(() => _ = engine.Execute("1d6n=-1"));
+        Assert.Throws<ParseException>(() => _ = engine.Execute("1d6n="));
+    }
 }

@@ -90,4 +90,30 @@ public class DiceExpressionTests
         Assert.Single(results);
         Assert.Equal(2, Assert.IsType<NumericExpressionResult>(results[0]).Roll.Rolls.Length);
     }
+
+    [Fact]
+    public void N_equals_R_repeats_previous_expression_R_times()
+    {
+        // Arrange
+        var commandEngine = new DiceEngine(FixedSeed);
+        var explicitEngine = new DiceEngine(FixedSeed);
+
+        // Act
+        var commandResults = commandEngine.Execute("3d6n=5").ToList();
+        var explicitResults = explicitEngine.Execute("3d6;3d6;3d6;3d6;3d6").ToList();
+
+        // Assert
+        Assert.Equal(5, commandResults.Count);
+        Assert.Equal(explicitResults.Count, commandResults.Count);
+
+        for (int i = 0; i < commandResults.Count; i++)
+        {
+            var a = Assert.IsType<NumericExpressionResult>(commandResults[i]).Roll;
+            var b = Assert.IsType<NumericExpressionResult>(explicitResults[i]).Roll;
+
+            Assert.Equal(b.Total, a.Total);
+            Assert.Equal(b.Rolls, a.Rolls);
+            Assert.Equal(b.DiceRolled, a.DiceRolled);
+        }
+    }
 }

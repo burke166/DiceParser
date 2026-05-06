@@ -24,11 +24,14 @@ internal ref struct Parser
 
         while (_lex.Current.Kind != TokenKind.End)
         {
-            if (roots.Count >= _limits.MaxProgramExprs)
+            int expr = ParseExpression(0, customDieBracesOnly: false);
+            int repeatCount = ParseOptionalRepeatCommand();
+
+            if (roots.Count + repeatCount > _limits.MaxProgramExprs)
                 throw new ParseException($"Program has too many expressions (max {_limits.MaxProgramExprs}).");
 
-            int expr = ParseExpression(0, customDieBracesOnly: false);
-            roots.Add(expr);
+            for (int i = 0; i < repeatCount; i++)
+                roots.Add(expr);
 
             if (_lex.Current.Kind == TokenKind.Semicolon)
             {
@@ -44,6 +47,35 @@ internal ref struct Parser
 
         // Write back lexer state to caller (important since Lexer is a ref struct)
         return roots;
+    }
+
+    /// <summary>
+    /// Optional postfix program command <c>n=R</c> that repeats the preceding expression
+    /// <c>R</c> times as independent program expressions.
+    /// </summary>
+    private int ParseOptionalRepeatCommand()
+    {
+        if (_lex.Current.Kind != TokenKind.Identifier)
+            return 1;
+
+        ReadOnlySpan<char> id = _lex.SliceIdentifier(_lex.Current);
+        if (!id.Equals("n", StringComparison.OrdinalIgnoreCase))
+            return 1;
+
+        _lex.Next();
+        Expect(TokenKind.Equal);
+        _lex.Next();
+
+        if (_lex.Current.Kind != TokenKind.Number)
+            throw new ParseException("Expected positive integer repeat count after 'n='.");
+
+        int repeatCount = _lex.Current.IntValue;
+        _lex.Next();
+
+        if (repeatCount <= 0)
+            throw new ParseException("Repeat count after 'n=' must be positive.");
+
+        return repeatCount;
     }
 
     // Binding powers (Pratt)
@@ -539,6 +571,8 @@ internal ref struct Parser
             kind = DiceModKind.DropHighest;
         else if (id.Equals("dl", StringComparison.OrdinalIgnoreCase))
             kind = DiceModKind.DropLowest;
+        else if (id.Equals("n", StringComparison.OrdinalIgnoreCase))
+            return default;
         else
             throw new ParseException($"Unknown dice modifier '{new string(id)}'.");
 
