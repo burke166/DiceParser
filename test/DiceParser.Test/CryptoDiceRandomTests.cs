@@ -1,3 +1,4 @@
+using DiceParser;
 using DiceParser.Random;
 using Xunit;
 
@@ -39,5 +40,13 @@ public sealed class CryptoDiceRandomTests
 
         Assert.Throws<ArgumentException>(() =>
             rng.NextInt(minInclusive, maxExclusive));
+    }
+
+    [Fact]
+    public void DiceEngine_CreateCrypto_executes_without_throwing()
+    {
+        var engine = DiceEngine.CreateCrypto();
+        var results = engine.Execute("1d6");
+        Assert.Single(results);
     }
 }

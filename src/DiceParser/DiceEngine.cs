@@ -10,9 +10,23 @@ public sealed class DiceEngine
 {
     public DiceEngine(int seed)
     {
+        _useCrypto = false;
         _rng = new Xoshiro256StarStar((ulong)seed);
     }
 
+    /// <summary>Uses <see cref="CryptoDiceRandom"/> for rolls (non-deterministic).</summary>
+    public static DiceEngine CreateCrypto()
+    {
+        return new DiceEngine(crypto: true);
+    }
+
+    private DiceEngine(bool crypto)
+    {
+        _useCrypto = crypto;
+        _rng = default;
+    }
+
+    private readonly bool _useCrypto;
     private Xoshiro256StarStar _rng;
 
     /// <summary>
@@ -31,14 +45,26 @@ public sealed class DiceEngine
         var evaluator = new Evaluator(pool, limits.Value);
 
         var results = new List<ProgramExpressionResult>(roots.Count);
-        foreach (int rootId in roots)
+        if (_useCrypto)
         {
-            var diceRandom = new XoshiroDiceRandom(_rng);
-            var ctx = new EvalContext(diceRandom, limits.Value);
+            var cryptoRng = new CryptoDiceRandom();
+            foreach (int rootId in roots)
+            {
+                var ctx = new EvalContext(cryptoRng, limits.Value);
+                results.Add(BuildProgramResult(rootId, pool, evaluator, ref ctx));
+            }
+        }
+        else
+        {
+            foreach (int rootId in roots)
+            {
+                var diceRandom = new XoshiroDiceRandom(_rng);
+                var ctx = new EvalContext(diceRandom, limits.Value);
 
-            ProgramExpressionResult item = BuildProgramResult(rootId, pool, evaluator, ref ctx);
-            _rng = diceRandom.State;
-            results.Add(item);
+                ProgramExpressionResult item = BuildProgramResult(rootId, pool, evaluator, ref ctx);
+                _rng = diceRandom.State;
+                results.Add(item);
+            }
         }
 
         return results;
