@@ -160,6 +160,15 @@ public class ExplodeDiceTests
     }
 
     [Fact]
+    public void Custom_die_explode_compare_below_face_min_throws()
+    {
+        var engine = new DiceEngine(0);
+        var ex = Assert.Throws<EvalException>(() =>
+            _ = engine.ExecuteWithRng("1d{2,4,6,8}!1", new QueueRng(0)));
+        Assert.Contains("between", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Custom_die_explode_on_max_face_works()
     {
         var engine = new DiceEngine(0);
@@ -167,6 +176,18 @@ public class ExplodeDiceTests
 
         Assert.Equal([8, 4, 2], r.Rolls);
         Assert.Equal(14, r.Total);
+    }
+
+    [Fact]
+    public void Custom_die_explode_less_or_equal_uses_face_values()
+    {
+        var engine = new DiceEngine(0);
+        // First roll is 2 (<=4), so it explodes once into a 6.
+        var r = engine.ExecuteWithRngSingleNumeric("1d{2,4,6,8}!<4", new QueueRng(0, 2));
+
+        Assert.Equal([2, 6], r.Rolls);
+        Assert.Equal(8, r.Total);
+        Assert.Equal(2, r.DiceRolled);
     }
 
     [Fact]

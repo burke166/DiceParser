@@ -103,4 +103,16 @@ public class RerollDiceTests
         Assert.Equal([1, 1], r.Rolls);
         Assert.Equal(4, r.DiceRolled);
     }
+
+    [Fact]
+    public void Continuous_reroll_has_iteration_safety_guard()
+    {
+        var engine = new DiceEngine(0);
+        var alwaysOne = Enumerable.Repeat(0, 200).ToArray();
+
+        var ex = Assert.Throws<EvalException>(() =>
+            _ = engine.ExecuteWithRngSingleNumeric("1d6r1", new QueueRng(alwaysOne)));
+
+        Assert.Contains("Reroll limit exceeded", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

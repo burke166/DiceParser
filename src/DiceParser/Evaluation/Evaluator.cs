@@ -77,111 +77,131 @@ internal sealed class Evaluator
     private int EvalDice(int countExprId, int dieExprId, int modsHandle, ref EvalContext ctx)
     {
         int count = EvalInt(countExprId, ref ctx);
-        int[] facesArr = EvalDieFaces(dieExprId, ref ctx);
-        ReadOnlySpan<int> faces = facesArr;
+        int[] faces = EvalDieFaces(dieExprId, ref ctx);
 
+        ValidateDice(count, faces);
+
+        DiceRollMods mods = GetAndValidateMods(modsHandle, faces);
+        List<int> segment = RollDiceSegment(count, faces, mods, ref ctx);
+
+        int rollStart = ctx.Rolls.Count;
+        ctx.Rolls.AddRange(segment);
+
+        return ScoreDice(ctx.Rolls, rollStart, segment.Count, mods);
+    }
+
+    private void ValidateDice(int count, int[] faces)
+    {
         if (count < 0)
             throw new EvalException("Dice count cannot be negative.");
 
-        if (faces.Length <= 0)
+        if (faces.Length == 0)
             throw new EvalException("Dice must have at least one face.");
 
         if (faces.Length > _limits.MaxSides)
             throw new EvalException($"Dice sides too large (max {_limits.MaxSides}).");
+    }
 
-        DiceRollMods modsBundle = default;
-        bool hasMods = modsHandle != 0;
-        if (hasMods)
-        {
-            if (modsHandle < 1 || modsHandle > _pool.DiceRollModsCount)
-                throw new EvalException("Invalid dice modifier handle.");
+    private DiceRollMods GetAndValidateMods(int modsHandle, ReadOnlySpan<int> faces)
+    {
+        if (modsHandle == 0)
+            return default;
 
-            modsBundle = _pool.GetDiceRollModsByHandle(modsHandle);
-            if (modsBundle.Explode.HasExplode)
-                ValidateExplodeCompare(modsBundle.Explode, faces);
-            if (modsBundle.Reroll.HasReroll)
-                ValidateContinuousRerollLessOrEqual(modsBundle.Reroll, faces);
-        }
+        if (modsHandle < 1 || modsHandle > _pool.DiceRollModsCount)
+            throw new EvalException("Invalid dice modifier handle.");
 
-        int rollStart = ctx.Rolls.Count;
+        DiceRollMods mods = _pool.GetDiceRollModsByHandle(modsHandle);
+
+        if (mods.Explode.HasExplode)
+            ValidateExplodeCompare(mods.Explode, faces);
+
+        if (mods.Reroll.HasReroll)
+            ValidateContinuousRerollLessOrEqual(mods.Reroll, faces);
+
+        return mods;
+    }
+
+    private List<int> RollDiceSegment(
+        int count,
+        ReadOnlySpan<int> faces,
+        DiceRollMods mods,
+        ref EvalContext ctx)
+    {
         var segment = new List<int>(Math.Max(count * 2, 8));
+        RerollSpec reroll = mods.Reroll;
 
-        RerollSpec reroll = hasMods ? modsBundle.Reroll : default;
-        bool explode = hasMods && modsBundle.Explode.HasExplode;
-        if (!explode)
+        if (!mods.Explode.HasExplode)
         {
-            if (ctx.DiceRolled + count > _limits.MaxDicePerExpr)
-                throw new EvalException($"Too many dice rolled (max {_limits.MaxDicePerExpr}).");
-
             for (int i = 0; i < count; i++)
                 segment.Add(RollWithRerolls(ref ctx, faces, reroll));
+
+            return segment;
         }
-        else
+
+        RollExplodingDiceSegment(count, faces, mods.Explode, reroll, segment, ref ctx);
+        return segment;
+    }
+
+    private void RollExplodingDiceSegment(
+        int count,
+        ReadOnlySpan<int> faces,
+        ExplodeSpec spec,
+        RerollSpec reroll,
+        List<int> segment,
+        ref EvalContext ctx)
+    {
+        for (int i = 0; i < count; i++)
         {
-            ExplodeSpec spec = modsBundle.Explode;
             switch (spec.Mode)
             {
                 case ExplodeMode.Standard:
-                    for (int i = 0; i < count; i++)
-                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, reroll, penetrating: false);
+                    AppendStandardExplodingChain(segment, ref ctx, faces, spec, reroll, penetrating: false);
                     break;
-                case ExplodeMode.Compound:
-                    for (int i = 0; i < count; i++)
-                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, reroll, penetrating: false));
-                    break;
-                case ExplodeMode.CompoundPenetrating:
-                    for (int i = 0; i < count; i++)
-                        segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, reroll, penetrating: true));
-                    break;
+
                 case ExplodeMode.Penetrating:
-                    for (int i = 0; i < count; i++)
-                        AppendStandardExplodingChain(segment, ref ctx, faces, spec, reroll, penetrating: true);
+                    AppendStandardExplodingChain(segment, ref ctx, faces, spec, reroll, penetrating: true);
                     break;
+
+                case ExplodeMode.Compound:
+                    segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, reroll, penetrating: false));
+                    break;
+
+                case ExplodeMode.CompoundPenetrating:
+                    segment.Add(RollCompoundExplodingChain(ref ctx, faces, spec, reroll, penetrating: true));
+                    break;
+
                 default:
                     throw new EvalException("Unknown explode mode.");
             }
         }
+    }
 
-        foreach (int v in segment)
-            ctx.Rolls.Add(v);
+    private static int ScoreDice(List<int> rolls, int rollStart, int finalCount, DiceRollMods mods)
+    {
+        DiceMod kd = mods.KeepDrop;
 
-        int finalCount = segment.Count;
-        DiceMod kd = hasMods ? modsBundle.KeepDrop : default;
-
-        if (hasMods && modsBundle.HasSuccessCount)
-        {
-            int thr = modsBundle.SuccessAtLeast;
-            if (kd.Kind != DiceModKind.None)
-            {
-                if (kd.N <= 0)
-                    throw new EvalException("Keep/drop count must be positive.");
-
-                if (kd.N > finalCount)
-                    throw new EvalException("Keep/drop count cannot exceed number of dice rolled.");
-
-                return CountKeepDropSuccesses(ctx.Rolls, rollStart, finalCount, kd, thr);
-            }
-
-            return CountSuccessesInRange(ctx.Rolls, rollStart, finalCount, thr);
-        }
-
-        int total;
         if (kd.Kind != DiceModKind.None)
-        {
-            if (kd.N <= 0)
-                throw new EvalException("Keep/drop count must be positive.");
+            ValidateKeepDrop(kd, finalCount);
 
-            if (kd.N > finalCount)
-                throw new EvalException("Keep/drop count cannot exceed number of dice rolled.");
-
-            total = SumKeepDrop(ctx.Rolls, rollStart, finalCount, kd);
-        }
-        else
+        if (mods.HasSuccessCount)
         {
-            total = SumRollRange(ctx.Rolls, rollStart, finalCount);
+            return kd.Kind == DiceModKind.None
+                ? CountSuccessesInRange(rolls, rollStart, finalCount, mods.SuccessAtLeast)
+                : CountKeepDropSuccesses(rolls, rollStart, finalCount, kd, mods.SuccessAtLeast);
         }
 
-        return total;
+        return kd.Kind == DiceModKind.None
+            ? SumRollRange(rolls, rollStart, finalCount)
+            : SumKeepDrop(rolls, rollStart, finalCount, kd);
+    }
+
+    private static void ValidateKeepDrop(DiceMod kd, int finalCount)
+    {
+        if (kd.N <= 0)
+            throw new EvalException("Keep/drop count must be positive.");
+
+        if (kd.N > finalCount)
+            throw new EvalException("Keep/drop count cannot exceed number of dice rolled.");
     }
 
     private void TryConsumeRollBudget(ref EvalContext ctx)
