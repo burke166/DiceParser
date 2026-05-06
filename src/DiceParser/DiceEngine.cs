@@ -6,8 +6,11 @@ using DiceParser.Random;
 
 namespace DiceParser;
 
+/// <summary>Parses and evaluates dice roll expressions using a deterministic PRNG seeded by <see cref="DiceEngine(int)"/> or cryptographically strong randomness via <see cref="CreateCrypto"/>.</summary>
 public sealed class DiceEngine
 {
+    /// <summary>Creates an engine that rolls using a deterministic pseudo-random sequence.</summary>
+    /// <param name="seed">Seed for the internal PRNG.</param>
     public DiceEngine(int seed)
     {
         _useCrypto = false;

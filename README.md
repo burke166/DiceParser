@@ -2,65 +2,70 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-DiceParser is a flexible, extensible dice expression parser and evaluator written in C#. It is designed as a **general-purpose dice engine** suitable for tabletop RPGs, simulations, and custom game systems.
+**DiceParser** is a C# solution that provides a flexible dice expression parser and evaluator, packaged as a reusable library and a command-line tool. It is meant as a **general-purpose dice engine** for tabletop RPGs, simulations, and custom game systems.
 
-The library supports a rich grammar for dice expressions, including exploding dice, rerolls, success counting, custom dice, and more—while remaining system-agnostic.
+The grammar covers exploding dice, rerolls, success counting, custom dice, Fudge/Fate dice, keep/drop, inline roll groups, and full arithmetic—without baking in any one RPG’s rules.
+
+---
+
+## 📦 What’s in this repository
+
+| Path | Description |
+|------|-------------|
+| [`src/DiceParser`](src/DiceParser) | Core library, shipped as the NuGet package **DiceParser**. |
+| [`src/DiceParser.Cli`](src/DiceParser.Cli) | Global **.NET tool** (package **DiceParser.Cli**, command `diceparser`) built on the library. |
+
+- **Using the library in your code** → [`src/DiceParser/README.md`](src/DiceParser/README.md)  
+- **Using the CLI / dotnet tool** → [`src/DiceParser.Cli/README.md`](src/DiceParser.Cli/README.md)
 
 ---
 
 ## ✨ Features
 
-### 🎲 Core Dice Mechanics
-- `XdY` — Roll X dice with Y sides  
-  - Example: `3d10`
-- Full arithmetic support  
-  - Example: `(1+2)d(4+2)`
+### 🎲 Core dice mechanics
 
-### 🎯 Multiple Expressions
-- Separate expressions with `;`  
-  - Example: `1d20; 2d6+3`
+- `XdY` — roll *X* dice with *Y* sides (example: `3d10`)
+- Arithmetic on counts and sides (example: `(1+2)d(4+2)`)
 
-### 🎲 Custom Dice
-- Arbitrary face dice:
-  - `Xd{A,B,C}`
-  - Example: `4d{-1,0,1}`
+### 🎯 Multiple expressions
 
-### 🎲 Fudge / Fate Dice
-- `dF` is supported as a shorthand for Fudge/Fate dice
-- Equivalent to: `d{-1,0,1}`
-- Example:
-  - `4dF` → rolls four dice returning -1, 0, or +1 each
+- Separate with `;` (example: `1d20; 2d6+3`)
 
-### 💥 Exploding Dice
-- `!` — explode into new dice
-- `!!` — compound explosion
-- `!p` — penetrating explosion
-- `!>N` — explode on values ≥ N
-- `!X` — explode only on X
+### 🎲 Custom dice
+
+- Arbitrary faces: `Xd{A,B,C}` (example: `4d{-1,0,1}`)
+
+### 🎲 Fudge / Fate dice
+
+- `dF` is shorthand for `d{-1,0,1}` (example: `4dF`)
+
+### 💥 Exploding dice
+
+- `!`, `!!`, `!p`, `!>N`, `!X`
 
 ### 🔁 Rerolls
-- `rX` — reroll until not X
-- `ro<3` — reroll once if condition is met
 
-### 🎯 Success Counting
-- `>=N` — count successes
-- Example: `4d6>=5`
+- `rX`, `ro<3`, and related forms
 
-### 🧮 Keep / Drop
-- `khN` — keep highest N
-- `klN` — keep lowest N
-- `dhN` — drop highest N
-- `dlN` — drop lowest N
+### 🎯 Success counting
 
-### 🧩 Inline Roll Groups
-- Named roll sets:
-  ```
-  {attack: 1d20; damage: 2d6+3}
-  ```
+- `>=N` (example: `4d6>=5`)
+
+### 🧮 Keep / drop
+
+- `khN`, `klN`, `dhN`, `dlN`
+
+### 🧩 Inline roll groups
+
+Named sets use **commas** between entries (semicolons are not allowed inside the braces):
+
+```
+{attack:1d20,damage:2d6+3}
+```
 
 ---
 
-## 🧠 Evaluation Order
+## 🧠 Evaluation order
 
 1. Roll base dice  
 2. Apply rerolls  
@@ -71,54 +76,25 @@ The library supports a rich grammar for dice expressions, including exploding di
 
 ---
 
-## 🚀 Using DiceParser in Your Project
+## 🎲 Randomness: xoshiro256\*\*
 
-### Installation
+By default the library drives rolls with **xoshiro256\*\*** (Vigna’s *xor/shift/rotate* family): a compact **256-bit state**, very fast 64-bit steps, and the **\*\*** output scrambler (a rotated multiply) that strengthens statistical quality for typical game and simulation use compared with simpler LCGs or raw `System.Random`.
 
-Add the project or NuGet package (when published):
+A single 64-bit seed is expanded with **SplitMix64** into a full nonzero state so short seeds still produce well-spread initial states. Integer ranges for dice use **rejection sampling** over that generator so small ranges stay uniform.
 
-```bash
-dotnet add package DiceParser
-```
-
-### Example Usage
-
-```csharp
-var parser = new DiceParser();
-var result = parser.Evaluate("2d20kh1+5");
-
-Console.WriteLine(result.Total);
-```
-
-### Structured Results
-
-The evaluation returns:
-- Total
-- Individual rolls
-- Success counts (if applicable)
+For cases where cryptographic unpredictability is required, the engine also supports **`DiceEngine.CreateCrypto()`**, which uses OS-backed cryptographic randomness instead of xoshiro256\*\*.
 
 ---
 
-## 🧰 CLI Tool
+## 🎯 Design philosophy
 
-The repository includes **DiceParser.Cli**, which:
-- Demonstrates usage of the library
-- Provides a functional command-line dice roller
+DiceParser favors:
 
-See the CLI README for details.
+- General-purpose, composable syntax  
+- A clear split between the engine and game-specific rules  
+- Room to grow new dice mechanics without forking the grammar for one system  
 
----
-
-## 🎯 Design Philosophy
-
-DiceParser is built around:
-- General-purpose composable syntax
-- Separation of engine vs. game logic
-- Extensibility for new dice mechanics
-
-Game-specific concepts (like advantage/disadvantage) should be implemented in consuming applications using core primitives like `kh` and `kl`.
-
-DiceParser is built with two random number generators:
+Conveniences like D&D-style advantage/disadvantage belong in the consuming app, using primitives such as `kh` / `kl`.
 
 ---
 

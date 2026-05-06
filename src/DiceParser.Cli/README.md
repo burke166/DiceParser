@@ -1,103 +1,100 @@
 # DiceParser.Cli
 
-DiceParser.Cli is a command-line interface for the DiceParser library. It serves both as:
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 
-- A practical dice rolling tool
-- A reference implementation for integrating DiceParser
+**DiceParser.Cli** is the command-line front end for the DiceParser library. It is published as a **.NET global tool**: install the NuGet package **DiceParser.Cli** and run the **`diceparser`** command. The tool is useful for quick rolls at the terminal and as a minimal example of calling **`DiceEngine`**.
+
+---
+
+## 📦 Install / update
+
+Install globally (pick a stable version when you publish):
+
+```bash
+dotnet tool install -g DiceParser.Cli
+```
+
+Update an existing installation:
+
+```bash
+dotnet tool update -g DiceParser.Cli
+```
 
 ---
 
 ## 🚀 Usage
 
-Run from the command line:
-
-```bash
-dotnet run
+```text
+diceparser [options] [expression]
 ```
 
-DiceParse.Cli will open as an interactive text application.
+- **No expression** — Starts an **interactive** session: enter expressions until you type `exit`.
+- **Expression present** — Parses and evaluates it once, prints results, then exits.
+
+If the expression contains spaces, quote it.
+
+### Options
+
+| Option | Meaning |
+|--------|---------|
+| `-c`, `--crypto` | Use cryptographic randomness instead of the default PRNG. Cannot be combined with `--seed`. |
+| `-s`, `--seed <seed>` | 32-bit integer seed for the default **xoshiro256\*\***-backed roller. |
+| `-h`, `--help` | Print usage and exit. |
+| `-v`, `--version` | Print version and exit. |
+
+### Examples
+
+```bash
+diceparser
+diceparser 4d6kh3
+diceparser "1d20 + 5"
+diceparser --seed 12345 "4d6kh3"
+diceparser --crypto "1d100"
+```
 
 ---
 
-## 🎲 Supported Syntax
+## 🎲 Supported syntax
 
-The CLI supports all DiceParser syntax:
+The CLI accepts the same expressions as the library. In brief:
 
-### Core Dice
-- `XdY` → `3d6`
+- **Core:** `XdY`, arithmetic, `;` between expressions  
+- **Fudge:** `dF`  
+- **Custom faces:** `d{a,b,c}`  
+- **Exploding:** `!`, `!!`, `!p`, `!>N`, `!X`  
+- **Rerolls:** `r…`, `ro…`  
+- **Successes:** `>=N`  
+- **Keep/drop:** `kh` / `kl` / `dh` / `dl`  
+- **Roll groups** (comma-separated entries inside `{ }`):
 
-### Fudge / Fate Dice
-- `dF` → equivalent to `d{-1,0,1}`
-- Example:
-  ```bash
-  dotnet run -- "4dF"
-  ```
-
-### Arithmetic
-- `2d6+3`
-- `(1+2)d(4+2)`
-
-### Exploding Dice
-- `!`, `!!`, `!p`, `!>N`, `!X`
-
-### Rerolls
-- `rX`
-- `ro<3`
-
-### Success Counting
-- `>=N`
-
-### Keep / Drop
-- `kh`, `kl`, `dh`, `dl`
-
-### Multiple Rolls
-- Use `;`
-  ```
-  "1d20;2d6+3"
-  ```
-
-### Named Groups
-- Use `{}` to create a named-group set. Use `,` to separate groups.
-
+```bash
+diceparser "{attack:1d20,damage:2d6+3}"
 ```
-dotnet run -- "{attack:1d20,damage:2d6+3}"
-```
+
+Full feature notes and evaluation order live in the [solution README](../../README.md).
 
 ---
 
 ## 📤 Output
 
-The CLI displays:
-- Total result
-- Individual dice rolls
-- Additional computed data (successes, etc.)
+For each run the tool prints the input line, then one block per top-level expression:
+
+- **Numeric expression** — `Total`, `DiceRolled`, and ordered `Rolls` for that expression.  
+- **Roll group** — A short header plus each **label** with its own `Total`, `DiceRolled`, and `Rolls`.
 
 ---
 
-## 🧠 Notes
+## 🛠️ Development (run from source)
 
-- The CLI is a thin wrapper around the DiceParser library
-- All parsing and evaluation logic resides in the core library
-- Use this project as a reference for building APIs or UI applications
+From the `src/DiceParser.Cli` project directory:
 
----
-
-## 🔧 Example
-
-```
-"4d6kh3"
-```
-
-Output (example):
-
-```
-Rolls: [6, 2, 5, 3]
-Kept: [6, 5, 3]
-Total: 14
+```bash
+dotnet run
+dotnet run -- "4d6kh3"
 ```
 
 ---
 
 ## 📄 License
 
-Same as the parent DiceParser project
+Same as the parent DiceParser project (MIT).
