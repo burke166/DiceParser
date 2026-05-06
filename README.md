@@ -118,6 +118,8 @@ DiceParser is built around:
 
 Game-specific concepts (like advantage/disadvantage) should be implemented in consuming applications using core primitives like `kh` and `kl`.
 
+DiceParser is built with two random number generators:
+
 ---
 
 ## 📄 License

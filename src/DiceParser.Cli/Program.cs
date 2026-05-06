@@ -232,11 +232,12 @@ public static class Program
     private static void PrintVersion()
     {
         Assembly asm = typeof(Program).Assembly;
-        string? informational =
-            asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        string? version = informational
-            ?? asm.GetName().Version?.ToString();
-        Console.WriteLine(version ?? "0.0.0");
+
+        string? version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion
+            ?? asm.GetName().Version?.ToString()
+            ?? "0.0.0";
+        Console.WriteLine($"{GetExecutableDisplayName()} {version}");
     }
 
     private static string GetExecutableDisplayName()
