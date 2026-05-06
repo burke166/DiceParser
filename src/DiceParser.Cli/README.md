@@ -39,8 +39,9 @@ If the expression contains spaces, quote it.
 |--------|---------|
 | `-c`, `--crypto` | Use cryptographic randomness instead of the default PRNG. Cannot be combined with `--seed`. |
 | `-s`, `--seed <seed>` | 32-bit integer seed for the default **xoshiro256\*\***-backed roller. |
+| `-v`, `--verbose` | Print a parsed AST dump before each expression result (diagnostic mode). |
 | `-h`, `--help` | Print usage and exit. |
-| `-v`, `--version` | Print version and exit. |
+| `--version` | Print version and exit. |
 
 ### Examples
 
@@ -50,6 +51,7 @@ diceparser 4d6kh3
 diceparser "1d20 + 5"
 diceparser --seed 12345 "4d6kh3"
 diceparser --crypto "1d100"
+diceparser --verbose "1d20+5;2d6"
 ```
 
 ---
@@ -79,6 +81,7 @@ Full feature notes and evaluation order live in the [solution README](../../READ
 
 For each run the tool prints the input line, then one block per top-level expression:
 
+- With `--verbose`, each expression includes an AST section before roll results.
 - **Numeric expression** — `Total`, `DiceRolled`, and ordered `Rolls` for that expression.  
 - **Roll group** — A short header plus each **label** with its own `Total`, `DiceRolled`, and `Rolls`.
 

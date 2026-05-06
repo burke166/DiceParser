@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using DiceParser;
+using DiceParser.Diagnostics;
 using DiceParser.Exceptions;
 
 namespace DiceParser.Cli;
@@ -38,10 +39,10 @@ public static class Program
 
         if (parsed.Mode == CliRunMode.RunOnce)
         {
-            return RunOnce(engine, parsed.Expression!);
+            return RunOnce(engine, parsed.Expression!, parsed.Verbose);
         }
 
-        RunInteractive(engine);
+        RunInteractive(engine, parsed.Verbose);
         return ExitSuccess;
     }
 
@@ -55,6 +56,7 @@ public static class Program
         int? seed = null;
         bool help = false;
         bool version = false;
+        bool verbose = false;
         var positional = new List<string>();
 
         for (int i = 0; i < args.Length; i++)
@@ -78,9 +80,15 @@ public static class Program
                 continue;
             }
 
-            if (a == "-v" || a == "--version")
+            if (a == "--version")
             {
                 version = true;
+                continue;
+            }
+
+            if (a == "-v" || a == "--verbose")
+            {
+                verbose = true;
                 continue;
             }
 
@@ -162,6 +170,7 @@ public static class Program
                 Mode = CliRunMode.RunInteractive,
                 UseCrypto = useCrypto,
                 Seed = seedSpecified ? seed : null,
+                Verbose = verbose,
             };
             return true;
         }
@@ -172,6 +181,7 @@ public static class Program
             UseCrypto = useCrypto,
             Seed = seedSpecified ? seed : null,
             Expression = expression,
+            Verbose = verbose,
         };
         return true;
     }
@@ -183,6 +193,7 @@ public static class Program
         public bool UseCrypto { get; init; }
         public int? Seed { get; init; }
         public string? Expression { get; init; }
+        public bool Verbose { get; init; }
     }
 
     internal enum CliRunMode
@@ -217,8 +228,9 @@ public static class Program
             Options:
               -c, --crypto            Use CryptoDiceRandom instead of XoshiroDiceRandom.
               -s, --seed <seed>       Use the specified integer seed with XoshiroDiceRandom.
+              -v, --verbose           Print parsed AST diagnostics before each expression result.
               -h, --help              Show help and exit.
-              -v, --version           Show version and exit.
+                  --version           Show version and exit.
 
             Examples:
               {name}
@@ -245,12 +257,12 @@ public static class Program
         return typeof(Program).Assembly.GetName().Name ?? "DiceParser.Cli";
     }
 
-    private static int RunOnce(DiceEngine engine, string input)
+    private static int RunOnce(DiceEngine engine, string input, bool verbose)
     {
         try
         {
             var results = engine.Execute(input);
-            PrintExpressionResults(input, results);
+            PrintExpressionResults(input, results, verbose);
             return ExitSuccess;
         }
         catch (ParseException ex)
@@ -270,7 +282,7 @@ public static class Program
         }
     }
 
-    private static void RunInteractive(DiceEngine engine)
+    private static void RunInteractive(DiceEngine engine, bool verbose)
     {
         string input = string.Empty;
 
@@ -283,7 +295,7 @@ public static class Program
             try
             {
                 var results = engine.Execute(input);
-                PrintExpressionResults(input, results);
+                PrintExpressionResults(input, results, verbose);
                 Console.WriteLine();
             }
             catch (ParseException ex)
@@ -301,11 +313,22 @@ public static class Program
         }
     }
 
-    private static void PrintExpressionResults(string input, IReadOnlyList<ProgramExpressionResult> results)
+    private static void PrintExpressionResults(string input, IReadOnlyList<ProgramExpressionResult> results, bool verbose)
     {
+        IReadOnlyList<string>? astDumps = null;
+        if (verbose)
+            astDumps = AstDumper.DumpProgram(input);
+
         Console.WriteLine($"Input: {input}");
         for (int i = 0; i < results.Count; i++)
         {
+            if (verbose && astDumps is not null)
+            {
+                Console.WriteLine($"  Expr {i + 1} AST:");
+                foreach (string line in astDumps[i].Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
+                    Console.WriteLine($"    {line}");
+            }
+
             ProgramExpressionResult r = results[i];
             switch (r)
             {

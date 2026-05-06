@@ -63,6 +63,16 @@ Named sets use **commas** between entries (semicolons are not allowed inside the
 {attack:1d20,damage:2d6+3}
 ```
 
+### 🔎 CLI diagnostics
+
+The CLI supports a verbose diagnostics mode with `-v` / `--verbose` that prints an AST dump for each parsed program segment before printing roll output.
+
+Example:
+
+```bash
+diceparser --verbose "1d20+5;2d6"
+```
+
 ---
 
 ## 🧠 Evaluation order

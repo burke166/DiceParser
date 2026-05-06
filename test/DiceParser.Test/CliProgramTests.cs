@@ -58,8 +58,17 @@ public class CliProgramTests
     [Fact]
     public void Parse_version_mode()
     {
-        Assert.True(TryParseCliArgs(["-v"], out var p, out _));
+        Assert.True(TryParseCliArgs(["--version"], out var p, out _));
         Assert.Equal(CliRunMode.Version, p.Mode);
+    }
+
+    [Fact]
+    public void Parse_verbose_mode()
+    {
+        Assert.True(TryParseCliArgs(["-v", "1d6"], out var p, out _));
+        Assert.Equal(CliRunMode.RunOnce, p.Mode);
+        Assert.True(p.Verbose);
+        Assert.Equal("1d6", p.Expression);
     }
 
     [Fact]
@@ -133,5 +142,34 @@ public class CliProgramTests
     {
         int code = Run(["--crypto", "-s", "1", "1d6"]);
         Assert.NotEqual(0, code);
+    }
+
+    [Fact]
+    public void Run_verbose_prints_ast_before_each_expression_result()
+    {
+        TextWriter originalOut = Console.Out;
+        var captured = new StringWriter();
+
+        try
+        {
+            Console.SetOut(captured);
+            int code = Run(["--seed", "123", "--verbose", "1d6;2d4"]);
+            Assert.Equal(0, code);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        string output = captured.ToString();
+        int ast1 = output.IndexOf("Expr 1 AST:", StringComparison.Ordinal);
+        int res1 = output.IndexOf("Expr 1: Total=", StringComparison.Ordinal);
+        int ast2 = output.IndexOf("Expr 2 AST:", StringComparison.Ordinal);
+        int res2 = output.IndexOf("Expr 2: Total=", StringComparison.Ordinal);
+
+        Assert.True(ast1 >= 0, "Expected AST header for expression 1.");
+        Assert.True(res1 > ast1, "Expected expression 1 result after its AST output.");
+        Assert.True(ast2 > res1, "Expected expression 2 AST after expression 1 result.");
+        Assert.True(res2 > ast2, "Expected expression 2 result after its AST output.");
     }
 }
